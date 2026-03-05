@@ -1,0 +1,841 @@
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import path from "path";
+import fs from "fs";
+import { hash, compare } from "bcryptjs";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+import mysql from "mysql2/promise";
+import { GoogleGenAI, Type } from "@google/genai";
+
+dotenv.config();
+
+// Gemini Setup
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+// Helper to get DB config with validation
+const getDbConfig = () => ({
+  host: process.env.DB_HOST || "MISSING_HOST",
+  user: process.env.DB_USER || "MISSING_USER",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "MISSING_DATABASE",
+  port: parseInt(process.env.DB_PORT || "3306"),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
+  connectTimeout: 30000,
+  acquireTimeout: 30000,
+});
+
+let pool: mysql.Pool;
+
+const getPool = () => {
+  if (!pool) {
+    const config = getDbConfig();
+    const missing = [];
+    if (config.host === "MISSING_HOST") missing.push("DB_HOST");
+    if (config.user === "MISSING_USER") missing.push("DB_USER");
+    if (config.database === "MISSING_DATABASE") missing.push("DB_NAME");
+    
+    if (missing.length > 0) {
+      throw new Error(`Database not configured. Missing: ${missing.join(", ")}. Please set these in AI Studio Secrets.`);
+    }
+    
+    console.log("Initializing database pool on demand...");
+    pool = mysql.createPool(config);
+  }
+  return pool;
+};
+
+async function initDatabase() {
+  const config = getDbConfig();
+  if (config.host === "MISSING_HOST" || config.user === "MISSING_USER" || config.database === "MISSING_DATABASE") {
+    console.warn("⚠️ MySQL Configuration missing. Database initialization skipped.");
+    return;
+  }
+
+  try {
+    console.log(`Initializing MySQL database at ${config.host}:${config.port}...`);
+    
+    if (!pool) {
+      pool = mysql.createPool(config);
+    }
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        niche TEXT,
+        products TEXT,
+        problems TEXT,
+        audience TEXT,
+        tone VARCHAR(255) DEFAULT 'Professional & Helpful',
+        contentType VARCHAR(255) DEFAULT 'Suggestions & Advice',
+        reset_token VARCHAR(255),
+        reset_token_expiry DATETIME,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create strategies table
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS strategies (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT,
+        title VARCHAR(255) NOT NULL,
+        data TEXT NOT NULL,
+        start_date VARCHAR(255),
+        completed_days TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log("✅ MySQL database initialized successfully.");
+  } catch (error) {
+    console.error("❌ Failed to initialize MySQL database:", error);
+  }
+}
+
+async function addToActiveCampaign(email: string) {
+  const url = process.env.ACTIVECAMPAIGN_URL;
+  const apiKey = process.env.ACTIVECAMPAIGN_API_KEY;
+  const tagName = process.env.ACTIVECAMPAIGN_TAG_NAME;
+
+  if (!url || !apiKey || !tagName) {
+    console.warn("ActiveCampaign credentials missing, skipping contact creation.");
+    return;
+  }
+
+  try {
+    // 1. Create or sync contact
+    const contactRes = await fetch(`${url}/api/3/contact/sync`, {
+      method: 'POST',
+      headers: {
+        'Api-Token': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contact: { email }
+      })
+    });
+    const contactData = await contactRes.json();
+    const contactId = contactData.contact?.id;
+
+    if (contactId) {
+      // 2. Find Tag ID by Name
+      const tagsRes = await fetch(`${url}/api/3/tags?search=${encodeURIComponent(tagName)}`, {
+        headers: {
+          'Api-Token': apiKey
+        }
+      });
+      const tagsData = await tagsRes.json();
+      
+      // Look for an exact match in the search results
+      const tag = tagsData.tags?.find((t: any) => t.tag.toLowerCase() === tagName.toLowerCase());
+      let tagId = tag?.id;
+
+      // 3. If tag doesn't exist, create it
+      if (!tagId) {
+        const createTagRes = await fetch(`${url}/api/3/tags`, {
+          method: 'POST',
+          headers: {
+            'Api-Token': apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tag: {
+              tag: tagName,
+              tagType: "template",
+              description: "Created by 30-Day Content Challenge"
+            }
+          })
+        });
+        const createTagData = await createTagRes.json();
+        tagId = createTagData.tag?.id;
+      }
+
+      if (tagId) {
+        // 4. Add Tag to contact
+        await fetch(`${url}/api/3/contactTags`, {
+          method: 'POST',
+          headers: {
+            'Api-Token': apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contactTag: {
+              contact: contactId,
+              tag: tagId
+            }
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error adding to ActiveCampaign:", error);
+  }
+}
+
+async function checkActiveCampaignMembership(email: string): Promise<boolean> {
+  const url = process.env.ACTIVECAMPAIGN_URL;
+  const apiKey = process.env.ACTIVECAMPAIGN_API_KEY;
+  const memberTagName = process.env.ACTIVECAMPAIGN_MEMBER_TAG_NAME;
+
+  if (!url || !apiKey || !memberTagName) {
+    console.warn("ActiveCampaign credentials or member tag name missing.");
+    return false;
+  }
+
+  try {
+    // 1. Get contact by email
+    const contactRes = await fetch(`${url}/api/3/contacts?email=${encodeURIComponent(email)}`, {
+      headers: { 'Api-Token': apiKey }
+    });
+    const contactData = await contactRes.json();
+    const contact = contactData.contacts?.[0];
+
+    if (!contact) return false;
+
+    // 2. Get contact's tags
+    const contactTagsRes = await fetch(`${url}/api/3/contacts/${contact.id}/contactTags`, {
+      headers: { 'Api-Token': apiKey }
+    });
+    const contactTagsData = await contactTagsRes.json();
+    
+    // 3. Get all tags to find the ID of the member tag
+    const tagsRes = await fetch(`${url}/api/3/tags?search=${encodeURIComponent(memberTagName)}`, {
+      headers: { 'Api-Token': apiKey }
+    });
+    const tagsData = await tagsRes.json();
+    const memberTag = tagsData.tags?.find((t: any) => t.tag.toLowerCase() === memberTagName.toLowerCase());
+
+    if (!memberTag) return false;
+
+    // 4. Check if the contact has the member tag ID
+    return contactTagsData.contactTags?.some((ct: any) => ct.tag === memberTag.id);
+  } catch (error) {
+    console.error("Error checking ActiveCampaign membership:", error);
+    return false;
+  }
+}
+
+async function sendResetEmail(email: string, token: string, origin?: string) {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const resendFromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  const appUrl = process.env.APP_URL || origin || "http://localhost:3000";
+  const resetUrl = `${appUrl.replace(/\/$/, '')}?step=reset_password&token=${token}`;
+
+  console.log(`[PASSWORD RESET] Email: ${email}, Token: ${token}`);
+  console.log(`[PASSWORD RESET] Link: ${resetUrl}`);
+
+  if (!resendApiKey || resendApiKey === 're_123456789') {
+    const msg = "⚠️ RESEND_API_KEY is missing or using placeholder value. Reset email not sent.";
+    console.warn(msg);
+    console.log("--------------------------------------------------");
+    console.log(`[PASSWORD RESET - MOCK MODE]`);
+    console.log(`Email: ${email}`);
+    console.log(`Link: ${resetUrl}`);
+    console.log("--------------------------------------------------");
+    throw new Error(msg);
+  }
+
+  try {
+    console.log(`Attempting to send reset email to ${email} via Resend...`);
+    
+    // If using the default onboarding email, Resend is very strict about the 'from' format
+    const fromField = resendFromEmail.includes('onboarding@resend.dev') 
+      ? 'onboarding@resend.dev' 
+      : `"30-Day Content Challenge" <${resendFromEmail.trim()}>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey.trim()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: fromField,
+        to: email.trim(),
+        subject: 'Reset Your Password - 30-Day Content Challenge',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #fff;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h1 style="color: #111; font-size: 24px; font-weight: bold; margin: 0;">Password Reset Request</h1>
+            </div>
+            <p style="color: #444; line-height: 1.6; font-size: 16px;">You requested a password reset for your <strong>30-Day Content Challenge</strong> account.</p>
+            <p style="color: #444; line-height: 1.6; font-size: 16px;">Click the button below to set a new password. This link will expire in 1 hour.</p>
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background-color: #000; color: #fff; text-decoration: none; border-radius: 9999px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">Reset Password</a>
+            </div>
+            <p style="color: #666; font-size: 14px; line-height: 1.6;">
+              If the button above doesn't work, copy and paste this link into your browser:
+              <br />
+              <a href="${resetUrl}" style="color: #6D28D9; text-decoration: underline;">${resetUrl}</a>
+            </p>
+            <p style="color: #888; font-size: 12px; margin-top: 40px; border-top: 1px solid #eee; padding-top: 24px; text-align: center;">
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </div>
+        `
+      })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      console.error("❌ Resend API error:", JSON.stringify(data, null, 2));
+      if (data.name === 'validation_error' && resendFromEmail === 'onboarding@resend.dev') {
+        const tip = "💡 TIP: When using 'onboarding@resend.dev', you can only send emails to your own Resend account email. To send to others, you must verify a domain in Resend.";
+        console.error(tip);
+        throw new Error(`Resend validation error: ${data.message || 'Check logs'}. ${tip}`);
+      }
+      throw new Error(`Resend API error: ${data.message || 'Check logs'}`);
+    } else {
+      console.log(`✅ Reset email sent successfully to ${email}. Resend ID: ${data.id}`);
+    }
+  } catch (error) {
+    console.error("Error sending reset email via Resend:", error);
+    throw error;
+  }
+}
+
+async function startServer() {
+  console.log("Starting server initialization...");
+  await initDatabase();
+  
+  const app = express();
+  const PORT = 3000;
+  const JWT_SECRET = process.env.JWT_SECRET || "insta-challenge-30-super-stable-secret-key-2024";
+
+  console.log("Configuring middleware...");
+  app.use(express.json());
+
+  // Check Resend Config
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || resendKey === 're_123456789') {
+    console.warn("⚠️ [CONFIG] RESEND_API_KEY is missing or using placeholder. Password reset will not work.");
+  } else {
+    console.log("✅ [CONFIG] RESEND_API_KEY is present.");
+  }
+
+  // Auth Middleware
+  const authenticateToken = (req: any, res: any, next: any) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+      if (err) return res.sendStatus(403);
+      req.user = user;
+      next();
+    });
+  };
+
+  // API Routes
+  app.get(["/api/login", "/api/login/"], (req, res) => {
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    res.redirect(`${appUrl}?step=auth&mode=login`);
+  });
+
+  app.get(["/api/register", "/api/register/"], (req, res) => {
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    res.redirect(`${appUrl}?step=auth&mode=register`);
+  });
+
+  app.get(["/api/forgot-password", "/api/forgot-password/"], (req, res) => {
+    // If someone accidentally GETs this (e.g. from a browser URL bar or a weird redirect)
+    // redirect them to the home page with the forgot password step active
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    res.redirect(`${appUrl}?step=forgot_password`);
+  });
+
+  app.post(["/api/forgot-password", "/api/forgot-password/"], async (req, res) => {
+    const { email: rawEmail } = req.body;
+    if (!rawEmail) return res.status(400).json({ error: "Email is required" });
+    const email = rawEmail.toLowerCase().trim();
+    
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+      const user = rows[0];
+
+      if (!user) {
+        return res.json({ success: true, message: "If an account exists, a reset link has been sent." });
+      }
+
+      const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const expiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+      await db.execute(
+        'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
+        [token, expiry, user.id]
+      );
+
+      const origin = `${req.protocol}://${req.get('host')}`;
+      await sendResetEmail(email, token, origin);
+      res.json({ success: true, message: "If an account exists, a reset link has been sent." });
+    } catch (error: any) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: error.message || "Server error" });
+    }
+  });
+
+  app.post(["/api/register", "/api/register/"], async (req, res) => {
+    const { email: rawEmail, password } = req.body;
+    
+    if (!rawEmail || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const email = rawEmail.toLowerCase().trim();
+    console.log(`[AUTH] Registration attempt for: ${email}`);
+    try {
+      const db = getPool();
+      const hashedPassword = await hash(password, 10);
+      
+      const [result]: any = await db.execute(
+        'INSERT INTO users (email, password) VALUES (?, ?)',
+        [email, hashedPassword]
+      );
+
+      const userId = result.insertId;
+      const token = jwt.sign({ id: userId, email }, JWT_SECRET);
+      
+      console.log(`User registered successfully: ${email}`);
+      addToActiveCampaign(email).catch(err => console.error("AC background error:", err));
+      
+      res.json({ token, user: { email } });
+    } catch (error: any) {
+      console.error(`Registration error for ${email}:`, error);
+      if (error.code === 'ER_DUP_ENTRY') {
+        return res.status(400).json({ error: "Email already exists" });
+      }
+      const message = error.message || "Server error";
+      res.status(500).json({ error: message, details: error });
+    }
+  });
+
+  app.post(["/api/login", "/api/login/"], async (req, res) => {
+    const { email: rawEmail, password } = req.body;
+    
+    if (!rawEmail || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const email = rawEmail.toLowerCase().trim();
+    console.log(`[AUTH] Login attempt for: ${email}`);
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+      const user = rows[0];
+      
+      if (!user) {
+        console.log(`[AUTH] User not found, auto-registering: ${email}`);
+        const hashedPassword = await hash(password, 10);
+        const [result]: any = await db.execute(
+          'INSERT INTO users (email, password) VALUES (?, ?)',
+          [email, hashedPassword]
+        );
+        
+        const userId = result.insertId;
+        const token = jwt.sign({ id: userId, email }, JWT_SECRET);
+        addToActiveCampaign(email).catch(err => console.error("AC background error:", err));
+        return res.json({ token, user: { email } });
+      }
+      
+      const isMatch = await compare(password, user.password);
+      if (!isMatch) {
+        console.log(`Login failed: Password mismatch - ${email}`);
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      const token = jwt.sign({ id: user.id, email }, JWT_SECRET);
+      console.log(`Login successful: ${email}`);
+      res.json({ token, user: { email } });
+    } catch (error: any) {
+      console.error(`Login error for ${email}:`, error);
+      const message = error.message || "Server error";
+      res.status(500).json({ error: message, details: error });
+    }
+  });
+
+  app.post(["/api/reset-password", "/api/reset-password/"], async (req, res) => {
+    const { token, password } = req.body;
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute(
+        'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?',
+        [token, new Date()]
+      );
+      const user = rows[0];
+      
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      const hashedPassword = await hash(password, 10);
+      await pool.execute(
+        'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?',
+        [hashedPassword, user.id]
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get(["/api/me", "/api/me/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute(
+        'SELECT id, email, niche, products, problems, audience, tone, contentType FROM users WHERE id = ?',
+        [req.user.id]
+      );
+      res.json({ user: rows[0] });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.put(["/api/profile", "/api/profile/"], authenticateToken, async (req: any, res) => {
+    const { niche, products, problems, audience, tone, contentType } = req.body;
+    try {
+      const db = getPool();
+      await db.execute(
+        'UPDATE users SET niche = ?, products = ?, problems = ?, audience = ?, tone = ?, contentType = ? WHERE id = ?',
+        [niche, products, problems, audience, tone, contentType, req.user.id]
+      );
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get(["/api/community/membership", "/api/community/membership/"], authenticateToken, async (req: any, res) => {
+    const isMember = await checkActiveCampaignMembership(req.user.email);
+    res.json({ 
+      isMember,
+      discordUrl: process.env.COMMUNITY_DISCORD_URL || "#",
+      trialUrl: process.env.COMMUNITY_TRIAL_URL || "#"
+    });
+  });
+
+  app.post(["/api/strategies", "/api/strategies/"], authenticateToken, async (req: any, res) => {
+    const { title, data, start_date } = req.body;
+    try {
+      const db = getPool();
+      await db.execute(
+        'INSERT INTO strategies (user_id, title, data, start_date) VALUES (?, ?, ?, ?)',
+        [req.user.id, title, JSON.stringify(data), start_date]
+      );
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get(["/api/strategies", "/api/strategies/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute(
+        'SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC',
+        [req.user.id]
+      );
+
+      res.json(rows.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        data: JSON.parse(s.data),
+        start_date: s.start_date,
+        completed_days: JSON.parse(s.completed_days || '[]'),
+        created_at: s.created_at
+      })));
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.delete(["/api/strategies/:id", "/api/strategies/:id/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      const [result]: any = await db.execute(
+        'DELETE FROM strategies WHERE id = ? AND user_id = ?',
+        [req.params.id, req.user.id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Strategy not found or unauthorized" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
+    const { completed_days } = req.body;
+    try {
+      const db = getPool();
+      await db.execute(
+        'UPDATE strategies SET completed_days = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(completed_days), req.params.id, req.user.id]
+      );
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.get("/api/debug/ip", async (req, res) => {
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      res.json({ 
+        publicIp: data.ip,
+        hint: "Add this IP to your Hostinger 'Remote MySQL' settings. Note: This IP may change if the container restarts." 
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch public IP", message: err.message });
+    }
+  });
+
+  app.get("/api/debug/mysql", async (req, res) => {
+    const config = getDbConfig();
+    const missingVars = [];
+    if (config.host === "MISSING_HOST") missingVars.push("DB_HOST");
+    if (config.user === "MISSING_USER") missingVars.push("DB_USER");
+    if (config.database === "MISSING_DATABASE") missingVars.push("DB_NAME");
+    if (!config.password) missingVars.push("DB_PASSWORD");
+
+    if (missingVars.length > 0) {
+      return res.status(400).json({
+        status: "error",
+        message: `Missing environment variables: ${missingVars.join(", ")}`,
+        config: { ...config, password: config.password ? "***" : "empty" },
+        hint: "Please add these variables to your AI Studio Secrets."
+      });
+    }
+
+    try {
+      if (!pool) pool = mysql.createPool(config);
+      const [rows]: any = await pool.query('SELECT 1 as connected');
+      const [userCount]: any = await pool.query('SELECT COUNT(*) as count FROM users');
+      
+      res.json({ 
+        status: "connected", 
+        userCount: userCount[0].count,
+        config: {
+          host: config.host,
+          database: config.database,
+          user: config.user
+        }
+      });
+    } catch (err: any) {
+      console.error("MySQL Debug Error:", err);
+      res.status(500).json({ 
+        status: "error", 
+        message: err.message, 
+        details: err,
+        config: { ...config, password: config.password ? "***" : "empty" },
+        hint: "Check your Hostinger MySQL credentials. Ensure 'Remote MySQL' is enabled in your Hostinger panel for this IP or allow all IPs (%) if safe." 
+      });
+    }
+  });
+
+  // Gemini Routes
+  app.post(["/api/gemini/generate-options", "/api/gemini/generate-options/"], authenticateToken, async (req: any, res) => {
+    const { profile } = req.body;
+    const prompt = `
+      You are an expert Instagram Growth Strategist. 
+      Create 3 distinct high-level concepts for a 30-day Instagram Reel series for a creator with the following profile:
+      - Niche: ${profile.niche}
+      - Products/Services: ${profile.products}
+      - Client Problems they solve: ${profile.problems}
+      - Target Audience: ${profile.audience}
+      - Desired Tone: ${profile.tone}
+      - Preferred Content Style: ${profile.contentType}
+
+      IMPORTANT: Each of the 3 options should explore a DIFFERENT "Angle" or "Challenge Type" even within the preferred style. 
+
+      Return only the high-level concepts (Title, Description, Target Audience, and Theme).
+    `;
+
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                targetAudience: { type: Type.STRING },
+                theme: { type: Type.STRING },
+              },
+              required: ["title", "description", "targetAudience", "theme"],
+            },
+          },
+        },
+      });
+
+      res.json(JSON.parse(response.text || "[]"));
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate options" });
+    }
+  });
+
+  app.post(["/api/gemini/generate-series", "/api/gemini/generate-series/"], authenticateToken, async (req: any, res) => {
+    const { concept, profile } = req.body;
+    const prompt = `
+      You are an expert Instagram Growth Strategist. 
+      Research the current market trends for the niche "${profile.niche}" and create a detailed 30-day script for the following series concept:
+      
+      Series Title: ${concept.title}
+      Series Theme: ${concept.theme}
+      Target Audience: ${profile.audience}
+      Tone: ${profile.tone}
+      Content Style: ${profile.contentType}
+
+      For EACH of the 30 days, provide:
+      1. Three distinct Hooks (First 3 seconds) - different angles (e.g., controversial, question, result-oriented).
+      2. Three corresponding Scripts (Exactly what to say, word-for-word) - each script should follow its respective hook.
+      3. Visuals/Structure (What should be happening on screen, e.g., "B-roll of coffee", "Text overlay pops up")
+      4. A Call to Action (CTA)
+      5. A suggested Caption with relevant hashtags.
+
+      Ensure the content is highly engaging, research-backed, and designed to convert.
+    `;
+
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema. Ensure you generate all 30 days. For each day, provide 3 distinct hooks and 3 corresponding scripts.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              targetAudience: { type: Type.STRING },
+              theme: { type: Type.STRING },
+              days: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    day: { type: Type.INTEGER },
+                    hooks: { 
+                      type: Type.ARRAY, 
+                      items: { type: Type.STRING },
+                      description: "3 distinct hooks for the day"
+                    },
+                    scripts: { 
+                      type: Type.ARRAY, 
+                      items: { type: Type.STRING },
+                      description: "3 distinct scripts corresponding to each hook"
+                    },
+                    value: { type: Type.STRING, description: "A summary of the day's value" },
+                    cta: { type: Type.STRING },
+                    caption: { type: Type.STRING },
+                    visuals: { type: Type.STRING, description: "Visual structure and storyboard" },
+                  },
+                  required: ["day", "hooks", "scripts", "value", "cta", "caption", "visuals"],
+                },
+              },
+            },
+            required: ["title", "description", "targetAudience", "theme", "days"],
+          },
+        },
+      });
+
+      res.json(JSON.parse(response.text || "{}"));
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate series" });
+    }
+  });
+
+  // 404 for API
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
+  });
+
+  // Global error handler for API
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (req.path.startsWith('/api')) {
+      console.error(`[API GLOBAL ERROR] ${req.method} ${req.path}:`, err);
+      return res.status(500).json({ error: "Internal server error", message: err.message });
+    }
+    next(err);
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      console.log("Initializing Vite server...");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+
+      app.use('*', async (req, res, next) => {
+        const url = req.originalUrl;
+        if (url.startsWith('/api')) return next();
+        try {
+          let template = fs.readFileSync(path.resolve("index.html"), "utf-8");
+          template = await vite.transformIndexHtml(url, template);
+          res.status(200).set({ "Content-Type": "text/html" }).end(template);
+        } catch (e) {
+          vite.ssrFixStacktrace(e as Error);
+          next(e);
+        }
+      });
+    } catch (err) {
+      console.error("Failed to start Vite server:", err);
+    }
+  } else {
+    app.use(express.static(path.resolve("dist")));
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve("dist/index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[STARTUP] Server bound to port ${PORT}. All services initialized.`);
+  });
+
+  // Global error handlers to prevent crashes
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception thrown:', err);
+  });
+}
+
+startServer();
