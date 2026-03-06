@@ -440,6 +440,24 @@ export default function App() {
                 .then(r => r.json())
                 .then(d => setMembership(d))
                 .catch(err => console.error("Failed to fetch membership:", err));
+                robustFetch('/api/me', {
+                  headers: { 'Authorization': `Bearer ${t}` }
+                })
+                .then(res => safeJson(res))
+                .then(data => {
+                  if (data?.user) {
+                    setProfile(prev => ({
+                      ...prev,
+                      niche: data.user.niche || prev.niche,
+                      products: data.user.products || prev.products,
+                      problems: data.user.problems || prev.problems,
+                      audience: data.user.audience || prev.audience,
+                      tone: data.user.tone || prev.tone,
+                      contentType: data.user.contentType || prev.contentType,
+                    }));
+                  }
+                })
+                .catch(err => console.error("Failed to fetch profile:", err));
                 robustFetch('/api/strategies', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
@@ -471,6 +489,7 @@ export default function App() {
             <MyStrategiesView 
               key="my_strategies"
               strategies={savedStrategies}
+              userContentType={profile.contentType}
               onSelect={(s) => {
                 setSelectedSeries({
                   ...s.data,
@@ -1166,7 +1185,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
   );
 }
 
-function MyStrategiesView({ strategies, onSelect, onDelete, onBack, onNew }: { strategies: any[], onSelect: (s: any) => void, onDelete: (id: number) => void, onBack: () => void, onNew: () => void }) {
+function MyStrategiesView({ strategies, userContentType, onSelect, onDelete, onBack, onNew }: { strategies: any[], userContentType?: string, onSelect: (s: any) => void, onDelete: (id: number) => void, onBack: () => void, onNew: () => void }) {
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -1230,9 +1249,9 @@ function MyStrategiesView({ strategies, onSelect, onDelete, onBack, onNew }: { s
               </div>
               <h3 className="text-xl font-display font-bold mb-3 group-hover:text-brand-primary transition-colors">{s.title}</h3>
               <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{s.data.description}</p>
-              {s.data.contentType && (
+              {(s.data.contentType || userContentType) && (
                 <span className="inline-block px-3 py-1 bg-brand-primary/10 text-brand-primary text-xs font-semibold rounded-full mb-4">
-                  {s.data.contentType}
+                  {s.data.contentType || userContentType}
                 </span>
               )}
               <div className="flex items-center gap-2 text-brand-primary font-bold text-sm">
