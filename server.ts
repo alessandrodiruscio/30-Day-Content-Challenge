@@ -10,10 +10,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
 
-// Gemini Setup (using Replit AI Integrations)
+// Gemini Setup
 const getAI = () => {
+  if (process.env.GEMINI_API_KEY) {
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
   return new GoogleGenAI({
-    apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "",
+    apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "",
     httpOptions: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL
       ? { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL }
       : undefined,
