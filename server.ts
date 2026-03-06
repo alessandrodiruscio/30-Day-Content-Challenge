@@ -678,7 +678,7 @@ async function startServer() {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema.",
           responseMimeType: "application/json",
@@ -731,7 +731,7 @@ async function startServer() {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema. Ensure you generate all 30 days. For each day, provide 3 distinct hooks and 3 corresponding scripts.",
           responseMimeType: "application/json",
