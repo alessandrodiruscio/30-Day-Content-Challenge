@@ -313,7 +313,7 @@ async function startServer() {
   await initDatabase();
   
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || "5000");
   const JWT_SECRET = process.env.JWT_SECRET || "insta-challenge-30-super-stable-secret-key-2024";
 
   console.log("Configuring middleware...");
