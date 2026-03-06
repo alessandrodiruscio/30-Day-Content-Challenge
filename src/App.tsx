@@ -97,7 +97,6 @@ export default function App() {
           const data = await safeJson(res);
           if (data.user) {
             setUser(data.user);
-            // Update profile with saved data from backend
             setProfile(prev => ({
               ...prev,
               niche: data.user.niche || prev.niche,
@@ -107,6 +106,12 @@ export default function App() {
               tone: data.user.tone || prev.tone,
               contentType: data.user.contentType || prev.contentType,
             }));
+            robustFetch('/api/community/membership', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(r => r.json())
+            .then(d => setMembership(d))
+            .catch(err => console.error("Failed to fetch membership:", err));
           }
         } else {
           // Token invalid or expired
@@ -429,7 +434,12 @@ export default function App() {
                 } catch (e) {
                   console.warn("Failed to save to localStorage:", e);
                 }
-                // After login, fetch strategies to decide where to go
+                robustFetch('/api/community/membership', {
+                  headers: { 'Authorization': `Bearer ${t}` }
+                })
+                .then(r => r.json())
+                .then(d => setMembership(d))
+                .catch(err => console.error("Failed to fetch membership:", err));
                 robustFetch('/api/strategies', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
