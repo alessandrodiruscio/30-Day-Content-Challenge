@@ -677,7 +677,7 @@ async function startServer() {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema.",
@@ -707,33 +707,19 @@ async function startServer() {
 
   app.post(["/api/gemini/generate-series", "/api/gemini/generate-series/"], authenticateToken, async (req: any, res) => {
     const { concept, profile } = req.body;
-    const prompt = `
-      You are an expert Instagram Growth Strategist. 
-      Research the current market trends for the niche "${profile.niche}" and create a detailed 30-day script for the following series concept:
-      
-      Series Title: ${concept.title}
-      Series Theme: ${concept.theme}
-      Target Audience: ${profile.audience}
-      Tone: ${profile.tone}
-      Content Style: ${profile.contentType}
+    const prompt = `Create a 30-day Instagram Reel series plan.
+Series: "${concept.title}" — ${concept.theme}
+Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} | Style: ${profile.contentType}
 
-      For EACH of the 30 days, provide:
-      1. Three distinct Hooks (First 3 seconds) - different angles (e.g., controversial, question, result-oriented).
-      2. Three corresponding Scripts (Exactly what to say, word-for-word) - each script should follow its respective hook.
-      3. Visuals/Structure (What should be happening on screen, e.g., "B-roll of coffee", "Text overlay pops up")
-      4. A Call to Action (CTA)
-      5. A suggested Caption with relevant hashtags.
-
-      Ensure the content is highly engaging, research-backed, and designed to convert.
-    `;
+For each of the 30 days provide: 3 hooks (first 3 seconds, different angles), 3 matching scripts (word-for-word), visuals/structure, a CTA, and a caption with hashtags. Be concise but actionable.`;
 
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema. Ensure you generate all 30 days. For each day, provide 3 distinct hooks and 3 corresponding scripts.",
+          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Be concise — keep scripts under 100 words each.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
