@@ -10,13 +10,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
 
-// Gemini Setup
+// Gemini Setup (using Replit AI Integrations)
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({
+    apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "",
+    httpOptions: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL
+      ? { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL }
+      : undefined,
+  });
 };
 
 // Helper to get DB config with validation

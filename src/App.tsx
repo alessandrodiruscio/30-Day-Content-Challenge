@@ -36,7 +36,6 @@ import {
   Trash2
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
-import { generateSeriesOptions, generateFullSeries } from './services/gemini';
 import { robustFetch, safeJson } from './utils/api';
 import { jsPDF } from 'jspdf';
 import { clsx, type ClassValue } from 'clsx';
@@ -81,42 +80,8 @@ export default function App() {
   const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(!!token);
-  const [hasApiKey, setHasApiKey] = useState(true);
+  const hasApiKey = true;
 
-  // Check for API key on mount and when it might have changed
-  useEffect(() => {
-    const checkApiKey = async () => {
-      if (typeof window !== 'undefined') {
-        // 1. Check if user has selected a key via the platform dialog
-        let selected = false;
-        if ((window as any).aistudio) {
-          selected = await (window as any).aistudio.hasSelectedApiKey();
-        }
-        
-        // 2. Check for dynamic environment variables (injected by platform)
-        const env = (window as any).process?.env || {};
-        const dynamicKey = env.API_KEY || env.GEMINI_API_KEY;
-        
-        // 3. Check for static environment variables (build-time)
-        const staticKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-        
-        const validKey = (key: any) => key && key !== 'undefined' && key !== 'MY_GEMINI_API_KEY' && key !== '';
-        
-        setHasApiKey(selected || validKey(dynamicKey) || validKey(staticKey));
-      }
-    };
-    checkApiKey();
-    
-    // Also check periodically or on focus to catch updates from the dialog
-    const interval = setInterval(checkApiKey, 2000);
-    window.addEventListener('focus', checkApiKey);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', checkApiKey);
-    };
-  }, []);
-
-  // Restore session on mount
   useEffect(() => {
     const restoreSession = async () => {
       if (!token) {
@@ -158,32 +123,11 @@ export default function App() {
     restoreSession();
   }, []);
 
-  const handleOpenKeySelector = async () => {
-    if (typeof window !== 'undefined' && (window as any).aistudio) {
-      await (window as any).aistudio.openSelectKey();
-      setHasApiKey(true); // Assume success as per guidelines
-      setError(null); // Clear any previous API key errors
-    }
-  };
+  const handleOpenKeySelector = () => {};
 
   const handleGeminiError = (err: any) => {
     console.error("Gemini Error:", err);
-    
-    // Check if it's an API key issue (either missing or invalid)
-    const errStr = typeof err === 'string' ? err : (err.message || JSON.stringify(err));
-    const isKeyIssue = 
-      err.message === "API_KEY_MISSING" || 
-      err.message === "API_KEY_INVALID" ||
-      errStr.includes("API key not valid") ||
-      errStr.includes("INVALID_ARGUMENT") ||
-      errStr.includes("400");
-
-    if (isKeyIssue) {
-      setError("Your Gemini API key is missing or invalid. Please select a valid API key from the 'Select API Key' button in the header to continue.");
-      setHasApiKey(false);
-    } else {
-      setError(err.message || 'Something went wrong while generating content.');
-    }
+    setError(err.message || 'Something went wrong while generating content.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -204,7 +148,19 @@ export default function App() {
     }
 
     try {
-      const results = await generateSeriesOptions(profile);
+      const res = await robustFetch('/api/gemini/generate-options', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ profile })
+      });
+      if (!res.ok) {
+        const data = await safeJson(res);
+        throw new Error(data.error || 'Failed to generate options');
+      }
+      const results = await safeJson(res);
       if (!results || results.length === 0) {
         throw new Error("No concepts were generated. Please try again.");
       }
@@ -220,7 +176,19 @@ export default function App() {
     setStep('loading_series');
     setError(null);
     try {
-      const fullSeries = await generateFullSeries(concept, profile);
+      const seriesRes = await robustFetch('/api/gemini/generate-series', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ concept, profile })
+      });
+      if (!seriesRes.ok) {
+        const data = await safeJson(seriesRes);
+        throw new Error(data.error || 'Failed to generate series');
+      }
+      const fullSeries = await safeJson(seriesRes);
       const seriesWithMeta = {
         ...fullSeries,
         start_date: profile.startDate,
@@ -348,15 +316,6 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-            {!hasApiKey && (
-              <button 
-                onClick={handleOpenKeySelector}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-bold hover:bg-amber-100 transition-all"
-              >
-                <Lock size={14} />
-                <span>Select API Key</span>
-              </button>
-            )}
             {user ? (
               <div className="relative">
                 <button 
