@@ -714,7 +714,13 @@ async function startServer() {
 Series: "${concept.title}" — ${concept.theme}
 Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} | Style: ${profile.contentType}
 
-For each of the 30 days provide: 3 hooks (first 3 seconds, different angles), 3 matching scripts (word-for-word), visuals/structure, a CTA, and a caption with hashtags. Be concise but actionable.`;
+For each of the 30 days provide:
+- 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
+- 3 matching full scripts (word-for-word, 150-250 words each). Each script must be DETAILED and VALUABLE — packed with specific tips, real examples, actionable steps, or compelling stories. The viewer should walk away having learned something concrete. Do NOT write vague or generic scripts. Every script should be so good it could stand alone as a high-performing reel.
+- Detailed visuals/structure describing exactly what the viewer sees on screen, transitions, text overlays, b-roll suggestions, and shot-by-shot breakdown
+- A clear CTA
+- A caption with relevant hashtags
+- 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research`;
 
     try {
       const ai = getAI();
@@ -722,7 +728,7 @@ For each of the 30 days provide: 3 hooks (first 3 seconds, different angles), 3 
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Be concise — keep scripts under 100 words each.",
+          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 150-250 words, detailed, specific, and packed with real value. No filler or vague advice — every sentence should teach, inspire, or persuade.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -751,8 +757,13 @@ For each of the 30 days provide: 3 hooks (first 3 seconds, different angles), 3 
                     cta: { type: Type.STRING },
                     caption: { type: Type.STRING },
                     visuals: { type: Type.STRING, description: "Visual structure and storyboard" },
+                    searchTerms: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "3 YouTube search queries to find inspiration videos from other creators on this topic"
+                    },
                   },
-                  required: ["day", "hooks", "scripts", "value", "cta", "caption", "visuals"],
+                  required: ["day", "hooks", "scripts", "value", "cta", "caption", "visuals", "searchTerms"],
                 },
               },
             },

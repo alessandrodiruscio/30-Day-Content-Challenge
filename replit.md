@@ -16,7 +16,7 @@ The app uses a single unified server (`server.ts`) that embeds Vite in middlewar
 
 - `server.ts` — Express server with all API routes and Vite middleware
 - `src/App.tsx` — Main React application (2000+ lines, single-page app)
-- `src/services/gemini.ts` — Gemini AI client helpers
+- `src/services/gemini.ts` — (deleted, no longer needed)
 - `src/utils/api.ts` — Fetch utility helpers
 - `src/types.ts` — TypeScript type definitions
 - `vite.config.ts` — Vite configuration
@@ -55,3 +55,21 @@ Outputs to `dist/`. Production server runs via `npx tsx server.ts` with `NODE_EN
 Configured for autoscale deployment:
 - Build: `npm run build`
 - Run: `npx tsx server.ts`
+
+## Content Generation
+
+The Gemini AI generates detailed 30-day content strategies with:
+- 3 hooks per day (different angles for the first 3 seconds)
+- 3 full scripts per day (150-250 words each, detailed and actionable)
+- Visual structure/storyboard for each day
+- CTA, caption with hashtags
+- 3 YouTube search terms per day for finding inspiration videos from other creators
+- Content type tag saved per strategy (e.g., "Suggestions & Advice", "Motivational Stories & Mindset")
+
+## UI Features
+
+- Favicon and logo branding (public/favicon.png, public/logo.png)
+- Strategy cards show content type tags
+- Delete button visible on mobile (hover-reveal on desktop only)
+- Inspiration Videos section in day detail view (links to YouTube searches)
+- Profile synced from server on login and session restore

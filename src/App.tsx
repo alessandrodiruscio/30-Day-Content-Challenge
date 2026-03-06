@@ -33,7 +33,8 @@ import {
   Eye,
   EyeOff,
   Info,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -1810,6 +1811,33 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                       {currentDay.caption}
                     </div>
                   </section>
+
+                  {currentDay.searchTerms && currentDay.searchTerms.length > 0 && (
+                    <section className="pt-6 md:pt-8 border-t border-zinc-100">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Play size={18} className="text-brand-primary" />
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Inspiration Videos</h4>
+                      </div>
+                      <p className="text-zinc-500 text-sm mb-4">Find videos from other creators who covered similar topics for research and inspiration.</p>
+                      <div className="space-y-3">
+                        {currentDay.searchTerms.map((term: string, idx: number) => (
+                          <a
+                            key={idx}
+                            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(term)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-4 rounded-xl bg-zinc-50 border border-zinc-100 hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all group"
+                          >
+                            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                              <Play size={18} className="text-red-500" />
+                            </div>
+                            <span className="text-sm font-medium text-zinc-700 group-hover:text-brand-primary transition-colors flex-1">{term}</span>
+                            <ExternalLink size={16} className="text-zinc-300 group-hover:text-brand-primary transition-colors flex-shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </div>
               </div>
             </motion.div>
