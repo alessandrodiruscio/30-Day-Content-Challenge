@@ -920,10 +920,9 @@ function LoadingView({ title }: { title: string }) {
         className="mb-12 flex flex-col items-center font-sans"
       >
         <img 
-          src="https://ais-dev-h75bdzhdnlo22ii4wm3tcc-360527981437.europe-west2.run.app/logo.png" 
-          alt="30-Day Content Challenge" 
+          src="/logo.png" 
+          alt="Escape 9 to 5" 
           className="h-32 w-auto object-contain mb-8"
-          referrerPolicy="no-referrer"
         />
       </motion.div>
       
