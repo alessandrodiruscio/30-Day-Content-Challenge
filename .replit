@@ -41,3 +41,16 @@ externalPort = 3000
 deploymentTarget = "autoscale"
 run = ["npx", "tsx", "server.ts"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+DB_PORT = "3306"
+COMMUNITY_DISCORD_URL = "https://www.escape9to5.life/discord-community"
+COMMUNITY_TRIAL_URL = "https://www.escape9to5.life/escape-9to5-club-free-month-trial/"
+ACTIVECAMPAIGN_URL = "https://alessandrodiruscio.api-us1.com"
+ACTIVECAMPAIGN_MEMBER_TAG_NAME = "enrolled-escape9to5club"
+RESEND_FROM_EMAIL = "info@alessandrodiruscio.com"
+DB_HOST = "195.35.59.95"
+DB_NAME = "u361584540_30daycontent"
+DB_USER = "u361584540_alessandrodiru"
