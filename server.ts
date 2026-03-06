@@ -708,7 +708,11 @@ async function startServer() {
     }
   });
 
-  app.post(["/api/gemini/generate-series", "/api/gemini/generate-series/"], authenticateToken, async (req: any, res) => {
+  app.post(["/api/gemini/generate-series", "/api/gemini/generate-series/"], authenticateToken, (req: any, res, next) => {
+    req.setTimeout(270000);
+    res.setTimeout(270000);
+    next();
+  }, async (req: any, res) => {
     const { concept, profile } = req.body;
     const prompt = `Create a 30-day Instagram Reel series plan.
 Series: "${concept.title}" — ${concept.theme}

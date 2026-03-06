@@ -1,7 +1,7 @@
 /**
  * A robust fetch wrapper with retry logic, timeout handling, and better error reporting
  */
-export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000, timeout = 120000): Promise<Response> {
+export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000, timeout = 300000): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
