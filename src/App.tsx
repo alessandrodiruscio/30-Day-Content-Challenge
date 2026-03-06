@@ -212,7 +212,7 @@ export default function App() {
             },
             body: JSON.stringify({
               title: fullSeries.title,
-              data: fullSeries,
+              data: { ...fullSeries, contentType: profile.contentType },
               start_date: profile.startDate
             })
           });
@@ -1214,7 +1214,7 @@ function MyStrategiesView({ strategies, onSelect, onDelete, onBack, onNew }: { s
                   e.stopPropagation();
                   onDelete(s.id);
                 }}
-                className="absolute top-6 right-6 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                className="absolute top-6 right-6 p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all md:opacity-0 md:group-hover:opacity-100"
                 title="Delete Strategy"
               >
                 <Trash2 size={18} />
@@ -1229,7 +1229,12 @@ function MyStrategiesView({ strategies, onSelect, onDelete, onBack, onNew }: { s
                 </span>
               </div>
               <h3 className="text-xl font-display font-bold mb-3 group-hover:text-brand-primary transition-colors">{s.title}</h3>
-              <p className="text-zinc-500 text-sm line-clamp-2 mb-6">{s.data.description}</p>
+              <p className="text-zinc-500 text-sm line-clamp-2 mb-4">{s.data.description}</p>
+              {s.data.contentType && (
+                <span className="inline-block px-3 py-1 bg-brand-primary/10 text-brand-primary text-xs font-semibold rounded-full mb-4">
+                  {s.data.contentType}
+                </span>
+              )}
               <div className="flex items-center gap-2 text-brand-primary font-bold text-sm">
                 <span>View Full Plan</span>
                 <ArrowRight size={16} />
