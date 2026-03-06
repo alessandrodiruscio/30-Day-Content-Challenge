@@ -1,9 +1,9 @@
 /**
  * A robust fetch wrapper with retry logic, timeout handling, and better error reporting
  */
-export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000): Promise<Response> {
+export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000, timeout = 120000): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
     const res = await fetch(url, {
@@ -13,18 +13,16 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
     
     clearTimeout(timeoutId);
     
-    // Retry on 5xx errors (server issues)
     if (!res.ok && res.status >= 500 && retries > 0) {
       console.warn(`Retrying ${url} due to server error ${res.status}...`);
       await new Promise(resolve => setTimeout(resolve, backoff));
-      return robustFetch(url, options, retries - 1, backoff * 2);
+      return robustFetch(url, options, retries - 1, backoff * 2, timeout);
     }
     
     return res;
   } catch (err: any) {
     clearTimeout(timeoutId);
     
-    // Handle specific mobile/Safari errors
     let errorMessage = err.message || String(err) || 'Unknown network error';
     const lowerMessage = errorMessage.toLowerCase();
     
@@ -37,10 +35,9 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
     if (retries > 0 && (err.name === 'AbortError' || err.name === 'TypeError' || !window.navigator.onLine)) {
       console.warn(`Retrying ${url} due to network error/timeout:`, errorMessage);
       await new Promise(resolve => setTimeout(resolve, backoff));
-      return robustFetch(url, options, retries - 1, backoff * 2);
+      return robustFetch(url, options, retries - 1, backoff * 2, timeout);
     }
     
-    // Create a new error with the better message but keep the original name if possible
     const enhancedError = new Error(errorMessage);
     enhancedError.name = err.name || 'FetchError';
     throw enhancedError;
