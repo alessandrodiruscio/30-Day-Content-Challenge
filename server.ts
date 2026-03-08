@@ -736,8 +736,8 @@ Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} 
 
 For each of the 30 days provide:
 - 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
-- 3 matching full scripts (word-for-word, 80-120 words each). CRITICAL: Use actual newline characters (\\n\\n) to separate paragraphs/sentences in scripts. Each script must be CONCISE, VALUABLE, and ACTIONABLE—packed with specific tips, real examples, or compelling stories that viewers can use immediately. Perfect for a 1-minute video.
-- Storyboard with creator actions (one line per script paragraph). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is needed, say "Use b-roll of [topic]" or "Add b-roll from Descript". Use actual newline characters (\\n) to separate each action, in the same order as script paragraphs.
+- 3 matching full scripts (word-for-word, 150-200 words each). CRITICAL: Use actual double newline characters (\\n\\n) to separate sentences or key ideas in scripts. Each script must be DETAILED, VALUABLE, and ACTIONABLE—packed with specific tips, real examples, compelling stories that viewers can use immediately. Aim for 5-6 distinct segments per script, each separated by \\n\\n.
+- Storyboard with creator actions (5-6 actions total, one per script segment). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic] from Descript" or link "Get b-roll at escape9to5.life/descript". Use actual newline characters (\\n) to separate each action, matching the order of script segments (separated by \\n\\n).
 - A clear CTA
 - A caption with relevant hashtags
 - 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research`;
@@ -748,7 +748,7 @@ For each of the 30 days provide:
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. CRITICAL: (1) Use double newlines (\\n\\n) between script paragraphs. (2) In visuals field: ONLY describe creator actions (smile, point, nod, lean, etc.). NO text overlays. If needed, suggest b-roll (e.g., 'Add b-roll of XYZ' or 'Use Descript for b-roll'). (3) Separate each action with single newline (\\n), matching script paragraph order. No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone.",
+          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 150-200 words, detailed, and packed with real value. CRITICAL: (1) Separate script segments with double newlines (\\n\\n)—aim for 5-6 segments per script. (2) In visuals field: ONLY describe creator actions for each segment (smile, point, nod, lean, etc.). NO text overlays. If b-roll is useful, say 'Use b-roll of X from Descript' or link to escape9to5.life/descript. (3) Provide 5-6 creator actions total, one per script segment, separated by single newline (\\n), matching script order. No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
