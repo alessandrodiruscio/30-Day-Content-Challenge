@@ -558,16 +558,31 @@ async function startServer() {
         [req.user.id]
       );
 
-      res.json(rows.map((s: any) => ({
-        id: s.id,
-        title: s.title,
-        data: JSON.parse(s.data),
-        start_date: s.start_date,
-        completed_days: JSON.parse(s.completed_days || '[]'),
-        created_at: s.created_at
-      })));
-    } catch (error) {
-      res.status(500).json({ error: "Server error" });
+      res.json(rows.map((s: any) => {
+        try {
+          return {
+            id: s.id,
+            title: s.title,
+            data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data,
+            start_date: s.start_date,
+            completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
+            created_at: s.created_at
+          };
+        } catch (parseErr) {
+          console.error(`Failed to parse strategy ${s.id}:`, parseErr);
+          return {
+            id: s.id,
+            title: s.title,
+            data: { error: "Failed to load strategy data" },
+            start_date: s.start_date,
+            completed_days: [],
+            created_at: s.created_at
+          };
+        }
+      }));
+    } catch (error: any) {
+      console.error("Failed to fetch strategies:", error);
+      res.status(500).json({ error: error.message || "Server error" });
     }
   });
 
