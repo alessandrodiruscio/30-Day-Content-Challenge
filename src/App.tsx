@@ -942,6 +942,20 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 }
 
 function LoadingView({ title }: { title: string }) {
+  const [progress, setProgress] = useState(0);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return 90;
+        const increment = Math.random() * 15;
+        return Math.min(prev + increment, 90);
+      });
+    }, 800);
+    
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-white">
       <motion.div
@@ -958,21 +972,25 @@ function LoadingView({ title }: { title: string }) {
       
       <h2 className="text-2xl font-display font-bold mb-6 text-zinc-900">{title}</h2>
       
-      <div className="w-64 h-1.5 bg-zinc-100 rounded-full overflow-hidden mb-8 relative">
-        <motion.div 
-          animate={{ 
-            x: [-256, 256],
-          }}
-          transition={{ 
-            duration: 2, 
-            repeat: Infinity, 
-            ease: "easeInOut" 
-          }}
-          className="w-full h-full bg-gradient-to-r from-[#DB2777] to-[#6D28D9] absolute"
-        />
+      <div className="w-full max-w-sm mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-semibold text-zinc-600">Progress</span>
+          <span className="text-sm font-bold text-brand-primary">{Math.round(progress)}%</span>
+        </div>
+        <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden">
+          <motion.div 
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="h-full bg-gradient-to-r from-[#DB2777] to-[#6D28D9]"
+          />
+        </div>
       </div>
       
-      <p className="text-zinc-500 max-w-sm leading-relaxed italic">
+      <p className="text-zinc-500 max-w-sm mb-4 text-sm">
+        This will take 2-3 minutes. Why not grab a coffee? ☕
+      </p>
+      
+      <p className="text-zinc-400 max-w-sm leading-relaxed italic text-sm">
         "Consistency is the bridge between goals and accomplishment."
       </p>
     </div>
