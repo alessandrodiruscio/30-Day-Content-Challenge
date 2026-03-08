@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 import { 
   Sparkles, 
   ArrowRight, 
@@ -34,7 +35,8 @@ import {
   EyeOff,
   Info,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -47,6 +49,12 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export default function App() {
+  const { t, i18n } = useTranslation();
+  const toggleLanguage = () => {
+    const next = i18n.language === 'en' ? 'es' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('language', next);
+  };
   const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password'>(
     (sessionStorage.getItem('currentStep') as any) || 'landing'
   );
@@ -289,7 +297,7 @@ export default function App() {
   };
 
   const handleDeleteStrategy = async (id: number) => {
-    if (!token || !window.confirm('Are you sure you want to delete this strategy?')) return;
+    if (!token || !window.confirm(t('strategies.deleteConfirm'))) return;
     try {
       const res = await robustFetch(`/api/strategies/${id}`, {
         method: 'DELETE',
@@ -299,18 +307,18 @@ export default function App() {
         setSavedStrategies(prev => prev.filter(s => s.id !== id));
       } else {
         const data = await safeJson(res);
-        alert(data.error || 'Failed to delete strategy');
+        alert(data.error || t('strategies.deleteFailed'));
       }
     } catch (err) {
       console.error("Delete strategy failed:", err);
-      alert('Failed to delete strategy. Please check your connection.');
+      alert(t('strategies.deleteFailed'));
     }
   };
 
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-brand-primary/20">
       {isInitializing ? (
-        <LoadingView title="Restoring your session..." />
+        <LoadingView title={t('loading.restoringSession')} />
       ) : (
         <>
           {/* Header */}
@@ -318,10 +326,18 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep('landing')}>
             <img src="/favicon.png" alt="" className="w-6 h-6" />
-            <span className="font-display font-bold text-xl tracking-tight">30-Day Content Challenge</span>
+            <span className="font-display font-bold text-xl tracking-tight">{t('appName')}</span>
           </div>
           
           <div className="flex items-center gap-4">
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zinc-500 hover:text-brand-primary hover:bg-zinc-50 transition-all border border-zinc-200"
+              title="Switch language"
+            >
+              <Globe size={14} />
+              <span>{i18n.language === 'en' ? 'ES' : 'EN'}</span>
+            </button>
             {user ? (
               <div className="relative">
                 <button 
@@ -342,7 +358,7 @@ export default function App() {
                       className="absolute right-0 mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-zinc-100 py-3 z-50"
                     >
                       <div className="px-6 py-3 border-b border-zinc-50 mb-2">
-                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">Account</p>
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">{t('nav.account')}</p>
                         <p className="text-sm font-medium text-zinc-900 truncate">{user.email}</p>
                       </div>
                       
@@ -354,7 +370,7 @@ export default function App() {
                         className="w-full flex items-center gap-3 px-6 py-3 text-zinc-600 hover:bg-zinc-50 hover:text-brand-primary transition-colors text-left"
                       >
                         <History size={18} />
-                        <span className="font-medium">My Strategies</span>
+                        <span className="font-medium">{t('nav.myStrategies')}</span>
                       </button>
 
                       <button 
@@ -365,7 +381,7 @@ export default function App() {
                         className="w-full flex items-center gap-3 px-6 py-3 text-zinc-600 hover:bg-zinc-50 hover:text-brand-primary transition-colors text-left"
                       >
                         <Zap size={18} />
-                        <span className="font-medium">Recommended Tools</span>
+                        <span className="font-medium">{t('nav.recommendedTools')}</span>
                       </button>
 
                       {membership && (
@@ -377,7 +393,7 @@ export default function App() {
                           className="w-full flex items-center gap-3 px-6 py-3 text-brand-primary hover:bg-brand-primary/5 transition-colors text-left"
                         >
                           {membership.isMember ? <MessageSquare size={18} /> : <Sparkles size={18} />}
-                          <span className="font-medium">Join the Community</span>
+                          <span className="font-medium">{t('nav.joinCommunity')}</span>
                         </a>
                       )}
 
@@ -389,7 +405,7 @@ export default function App() {
                         className="w-full flex items-center gap-3 px-6 py-3 text-zinc-600 hover:bg-zinc-50 hover:text-brand-primary transition-colors text-left"
                       >
                         <Settings size={18} />
-                        <span className="font-medium">Profile Settings</span>
+                        <span className="font-medium">{t('nav.profileSettings')}</span>
                       </button>
 
                       <div className="h-px bg-zinc-50 my-2" />
@@ -399,7 +415,7 @@ export default function App() {
                         className="w-full flex items-center gap-3 px-6 py-3 text-red-500 hover:bg-red-50 transition-colors text-left"
                       >
                         <LogOut size={18} />
-                        <span className="font-medium">Logout</span>
+                        <span className="font-medium">{t('nav.logout')}</span>
                       </button>
                     </motion.div>
                   )}
@@ -410,7 +426,7 @@ export default function App() {
                 onClick={() => setStep('auth')}
                 className="text-sm font-semibold text-brand-primary hover:text-brand-secondary transition-colors"
               >
-                Login / Register
+                {t('nav.loginRegister')}
               </button>
             )}
           </div>
@@ -536,7 +552,7 @@ export default function App() {
           )}
 
           {step === 'loading_options' && (
-            <LoadingView key="loading_options" title="Crafting Your Concepts..." showPercentage={false} />
+            <LoadingView key="loading_options" title={t('loading.craftingConcepts')} showPercentage={false} />
           )}
 
           {step === 'results' && (
@@ -552,7 +568,7 @@ export default function App() {
           )}
 
           {step === 'loading_series' && (
-            <LoadingView key="loading_series" title="Generating Full Scripts & Researching Market..." showPercentage={true} />
+            <LoadingView key="loading_series" title={t('loading.generatingSeries')} showPercentage={true} />
           )}
 
           {step === 'detail' && selectedSeries && (
@@ -572,6 +588,7 @@ export default function App() {
 }
 
 function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, user: User | null, onSeeStrategies: () => void }) {
+  const { t } = useTranslation();
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -586,7 +603,7 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-primary/10 text-brand-primary text-sm font-semibold mb-8"
       >
         <img src="/favicon.png" alt="" className="w-4 h-4" />
-        <span>30-Day Content Challenge</span>
+        <span>{t('landing.badge')}</span>
       </motion.div>
       
       <motion.h1 
@@ -595,8 +612,8 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
         transition={{ delay: 0.3 }}
         className="text-5xl md:text-8xl font-display font-bold tracking-tight mb-8 leading-[1.1]"
       >
-        Turn Your Expertise Into <br />
-        <span className="text-brand-primary italic">30 Viral Reels</span>
+        {t('landing.heading1')} <br />
+        <span className="text-brand-primary italic">{t('landing.heading2')}</span>
       </motion.h1>
       
       <motion.p 
@@ -605,7 +622,7 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
         transition={{ delay: 0.4 }}
         className="text-xl text-zinc-600 mb-12 max-w-2xl mx-auto leading-relaxed"
       >
-        Stop staring at a blank screen. Tell us about your business, and we'll craft a cohesive, 30-day content series with full scripts and visual storyboards. Perfect for your next Instagram challenge.
+        {t('landing.description')}
       </motion.p>
 
       <motion.div
@@ -616,20 +633,15 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
       >
         <h2 className="text-xl font-display font-bold mb-4 flex items-center gap-2">
           <MessageSquare className="text-brand-primary" size={20} />
-          How it works
+          {t('landing.howItWorks')}
         </h2>
         <ul className="space-y-4">
-          {[
-            { step: "1", text: "Fill out your business profile (niche, products, audience)." },
-            { step: "2", text: "Choose from 3 AI-generated content strategy concepts." },
-            { step: "3", text: "Get 30 days of word-for-word scripts and visual plans." },
-            { step: "4", text: "Post one Reel per day and watch your authority grow!" }
-          ].map((item, i) => (
+          {(t('landing.steps', { returnObjects: true }) as string[]).map((text: string, i: number) => (
             <li key={i} className="flex gap-4 items-start">
               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
-                {item.step}
+                {i + 1}
               </span>
-              <p className="text-zinc-700 leading-snug">{item.text}</p>
+              <p className="text-zinc-700 leading-snug">{text}</p>
             </li>
           ))}
         </ul>
@@ -645,7 +657,7 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
           onClick={onStart}
           className="group relative inline-flex items-center gap-3 px-10 py-5 bg-brand-secondary text-white rounded-full font-semibold text-lg overflow-hidden transition-all hover:bg-slate-800 shadow-xl shadow-brand-secondary/20"
         >
-          <span>{user ? "Start Your Challenge" : "Login to Start"}</span>
+          <span>{user ? t('landing.startChallenge') : t('landing.loginToStart')}</span>
           <ArrowRight size={20} className="transition-transform group-hover:translate-x-1" />
         </motion.button>
 
@@ -660,31 +672,31 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
             className="inline-flex items-center gap-3 px-10 py-5 bg-white text-brand-secondary border-2 border-brand-secondary rounded-full font-semibold text-lg transition-all hover:bg-brand-primary/5"
           >
             <History size={20} />
-            <span>My Saved Strategies</span>
+            <span>{t('landing.viewStrategies')}</span>
           </motion.button>
         )}
       </div>
 
       <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-        {[
-          { icon: Target, title: "Niche Focused", desc: "Tailored to your specific market and audience pain points." },
-          { icon: Zap, title: "Sales Driven", desc: "Strategically designed to convert followers into paying clients." },
-          { icon: Calendar, title: "30-Day Plan", desc: "A complete roadmap so you never miss a day of posting." }
-        ].map((feature, i) => (
-          <motion.div
-            key={i}
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.6 + i * 0.1 }}
-            className="p-6 rounded-3xl bg-white border border-zinc-200 shadow-sm"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center mb-4 text-brand-primary">
-              <feature.icon size={24} />
-            </div>
-            <h3 className="font-display font-bold text-lg mb-2">{feature.title}</h3>
-            <p className="text-zinc-500 leading-relaxed">{feature.desc}</p>
-          </motion.div>
-        ))}
+        {[Target, Zap, Calendar].map((Icon, i) => {
+          const features = t('landing.features', { returnObjects: true }) as { title: string; desc: string }[];
+          const feature = features[i];
+          return (
+            <motion.div
+              key={i}
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 + i * 0.1 }}
+              className="p-6 rounded-3xl bg-white border border-zinc-200 shadow-sm"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-zinc-50 flex items-center justify-center mb-4 text-brand-primary">
+                <Icon size={24} />
+              </div>
+              <h3 className="font-display font-bold text-lg mb-2">{feature.title}</h3>
+              <p className="text-zinc-500 leading-relaxed">{feature.desc}</p>
+            </motion.div>
+          );
+        })}
       </div>
     </motion.div>
   );
@@ -699,6 +711,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
   hasApiKey: boolean,
   onSelectKey: () => void
 }) {
+  const { t } = useTranslation();
   const hasBusinessProfile = !!(profile.niche && profile.products && profile.problems && profile.audience);
   const [showBusinessFields, setShowBusinessFields] = useState(!hasBusinessProfile);
 
@@ -711,16 +724,16 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
     >
       <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 mb-8 transition-colors">
         <ChevronLeft size={20} />
-        <span>Back</span>
+        <span>{t('back')}</span>
       </button>
 
       <h2 className="text-3xl font-display font-bold mb-2">
-        {hasBusinessProfile ? "Create New Strategy" : "Tell us about your business"}
+        {hasBusinessProfile ? t('form.title') : t('form.subtitle')}
       </h2>
       <p className="text-zinc-500 mb-10">
         {hasBusinessProfile 
-          ? "We'll use your saved profile to craft this strategy. You can still adjust details below if needed."
-          : "The more detail you provide, the better the content series will be."}
+          ? t('form.profileHint')
+          : t('form.profileHintNew')}
       </p>
 
       {error && (
@@ -736,7 +749,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all"
             >
               <Lock size={14} />
-              <span>Select API Key Now</span>
+              <span>{t('results.selectApiKey')}</span>
             </button>
           )}
         </div>
@@ -746,7 +759,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
         {hasBusinessProfile && (
           <div className="p-6 rounded-2xl bg-zinc-50 border border-zinc-200 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-zinc-900">Using Business Profile</p>
+              <p className="text-sm font-bold text-zinc-900">{t('form.usingProfile')}</p>
               <p className="text-xs text-zinc-500">{profile.niche}</p>
             </div>
             <button 
@@ -754,7 +767,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
               onClick={() => setShowBusinessFields(!showBusinessFields)}
               className="text-xs font-bold text-brand-primary hover:underline"
             >
-              {showBusinessFields ? "Hide Details" : "Edit Details"}
+              {showBusinessFields ? t('form.hideDetails') : t('form.editDetails')}
             </button>
           </div>
         )}
@@ -769,11 +782,11 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-zinc-700">What is your niche?</label>
+                  <label className="block text-sm font-semibold text-zinc-700">{t('form.niche.label')}</label>
                   <div className="group relative">
                     <Info size={14} className="text-zinc-400 cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                      Be specific! Instead of "Fitness", try "Postpartum Fitness for Busy Moms". This helps the AI tailor the content perfectly.
+                      {t('form.niche.tooltip')}
                     </div>
                   </div>
                 </div>
@@ -782,7 +795,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
                   <input 
                     required
                     type="text"
-                    placeholder="e.g. Fitness Coach for Busy Moms"
+                    placeholder={t('form.niche.placeholder')}
                     className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
                     value={profile.niche}
                     onChange={e => setProfile({ ...profile, niche: e.target.value })}
@@ -792,11 +805,11 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-zinc-700">What products or services do you sell?</label>
+                  <label className="block text-sm font-semibold text-zinc-700">{t('form.products.label')}</label>
                   <div className="group relative">
                     <Info size={14} className="text-zinc-400 cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                      Mention your core offers. The AI will strategically weave these into your content to drive sales.
+                      {t('form.products.tooltip')}
                     </div>
                   </div>
                 </div>
@@ -805,7 +818,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
                   <input 
                     required
                     type="text"
-                    placeholder="e.g. 1-on-1 Coaching, Digital Meal Plans"
+                    placeholder={t('form.products.placeholder')}
                     className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
                     value={profile.products}
                     onChange={e => setProfile({ ...profile, products: e.target.value })}
@@ -815,11 +828,11 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-zinc-700">What are the top 3 problems you help your clients solve?</label>
+                  <label className="block text-sm font-semibold text-zinc-700">{t('form.problems.label')}</label>
                   <div className="group relative">
                     <Info size={14} className="text-zinc-400 cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                      Content that solves problems builds trust. List the biggest frustrations your audience has.
+                      {t('form.problems.tooltip')}
                     </div>
                   </div>
                 </div>
@@ -828,7 +841,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
                   <textarea 
                     required
                     rows={3}
-                    placeholder="e.g. No time to cook, lack of motivation, slow metabolism"
+                    placeholder={t('form.problems.placeholder')}
                     className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all resize-none"
                     value={profile.problems}
                     onChange={e => setProfile({ ...profile, problems: e.target.value })}
@@ -838,18 +851,18 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-zinc-700">Who is your ideal target audience?</label>
+                  <label className="block text-sm font-semibold text-zinc-700">{t('form.audience.label')}</label>
                   <div className="group relative">
                     <Info size={14} className="text-zinc-400 cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                      Describe your dream client. Think about their age, lifestyle, and what keeps them up at night.
+                      {t('form.audience.tooltip')}
                     </div>
                   </div>
                 </div>
                 <input 
                   required
                   type="text"
-                  placeholder="e.g. Working moms aged 30-45"
+                  placeholder={t('form.audience.placeholder')}
                   className="w-full px-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
                   value={profile.audience}
                   onChange={e => setProfile({ ...profile, audience: e.target.value })}
@@ -862,11 +875,11 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
         <div className="pt-4 border-t border-zinc-100 space-y-8">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-zinc-700">What type of content should the challenge focus on?</label>
+              <label className="block text-sm font-semibold text-zinc-700">{t('form.contentType.label')}</label>
               <div className="group relative">
                 <Info size={14} className="text-zinc-400 cursor-help" />
                 <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                  Choose the "vibe" of your 30-day series. This dictates the balance between teaching, selling, and storytelling.
+                  {t('form.contentType.tooltip')}
                 </div>
               </div>
             </div>
@@ -875,22 +888,19 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
               value={profile.contentType}
               onChange={e => setProfile({ ...profile, contentType: e.target.value })}
             >
-              <option>Suggestions & Advice</option>
-              <option>Motivational Stories & Mindset</option>
-              <option>Tools, Resources & Tech</option>
-              <option>Behind the Scenes & Process</option>
-              <option>Client Results & Case Studies</option>
-              <option>Mixed / Surprise Me</option>
+              {(t('form.contentType.options', { returnObjects: true }) as string[]).map((opt: string) => (
+                <option key={opt}>{opt}</option>
+              ))}
             </select>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-zinc-700">What tone should the content have?</label>
+              <label className="block text-sm font-semibold text-zinc-700">{t('form.tone.label')}</label>
               <div className="group relative">
                 <Info size={14} className="text-zinc-400 cursor-help" />
                 <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                  Your brand voice. Professional for B2B, Energetic for fitness, or Witty for lifestyle brands.
+                  {t('form.tone.tooltip')}
                 </div>
               </div>
             </div>
@@ -899,21 +909,19 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
               value={profile.tone}
               onChange={e => setProfile({ ...profile, tone: e.target.value })}
             >
-              <option>Professional & Helpful</option>
-              <option>Energetic & Motivating</option>
-              <option>Witty & Entertaining</option>
-              <option>Educational & Direct</option>
-              <option>Empathetic & Soft</option>
+              {(t('form.tone.options', { returnObjects: true }) as string[]).map((opt: string) => (
+                <option key={opt}>{opt}</option>
+              ))}
             </select>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-zinc-700">When do you want to start the challenge?</label>
+              <label className="block text-sm font-semibold text-zinc-700">{t('form.startDate.label')}</label>
               <div className="group relative">
                 <Info size={14} className="text-zinc-400 cursor-help" />
                 <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-zinc-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                  We'll use this to date your 30-day calendar.
+                  {t('form.startDate.tooltip')}
                 </div>
               </div>
             </div>
@@ -934,7 +942,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
           type="submit"
           className="w-full py-4 bg-brand-secondary text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all shadow-lg shadow-brand-secondary/10 active:scale-[0.99]"
         >
-          Generate Content Series
+          {t('form.generate')}
         </button>
       </form>
     </motion.div>
@@ -942,6 +950,7 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 }
 
 function LoadingView({ title, showPercentage = false }: { title: string, showPercentage?: boolean }) {
+  const { t } = useTranslation();
   const [progress, setProgress] = useState(0);
   const startTimeRef = React.useRef(Date.now());
   const estimatedDurationMs = 180000;
@@ -980,14 +989,14 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
       {showPercentage ? (
         <div className="w-full max-w-sm mb-4">
           <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-semibold text-zinc-600">Progress</span>
+            <span className="text-sm font-semibold text-zinc-600">{t('loading.progress')}</span>
             {progress >= 99 ? (
               <motion.span 
                 animate={{ opacity: [1, 0.3, 1] }}
                 transition={{ duration: 1.2, repeat: Infinity }}
                 className="text-sm font-bold text-brand-primary"
               >
-                Refining last changes...
+                {t('loading.refining')}
               </motion.span>
             ) : (
               <span className="text-sm font-bold text-brand-primary">{Math.round(progress)}%</span>
@@ -1019,18 +1028,19 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
       
       {showPercentage && (
         <p className="text-zinc-500 max-w-sm mb-4 text-sm">
-          This will take 2-3 minutes. Why not grab a coffee? ☕
+          {t('loading.coffeeMessage')}
         </p>
       )}
       
       <p className="text-zinc-400 max-w-sm leading-relaxed italic text-sm">
-        "Consistency is the bridge between goals and accomplishment."
+        {t('loading.quote')}
       </p>
     </div>
   );
 }
 
 function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (token: string, user: User) => void, onBack: () => void, initialMode?: 'login' | 'register' | 'forgot' }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1102,7 +1112,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
     >
       <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 mb-8 transition-colors">
         <ChevronLeft size={20} />
-        <span>Back</span>
+        <span>{t('back')}</span>
       </button>
 
       <div className="bg-white p-8 rounded-[2.5rem] border border-zinc-200 shadow-xl">
@@ -1115,7 +1125,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
                 mode === 'login' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
               )}
             >
-              Login
+              {t('auth.login')}
             </button>
             <button
               onClick={() => switchMode('register')}
@@ -1124,29 +1134,29 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
                 mode === 'register' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
               )}
             >
-              Register
+              {t('auth.register')}
             </button>
           </div>
         )}
 
         <h2 className="text-3xl font-display font-bold mb-2">
-          {mode === 'login' ? 'Welcome Back' : mode === 'register' ? 'Create Account' : 'Reset Password'}
+          {mode === 'login' ? t('auth.welcomeBack') : mode === 'register' ? t('auth.createAccount') : t('auth.resetPassword')}
         </h2>
         
         {serverStatus && serverStatus.status !== 'connected' && (
           <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-100 flex items-start gap-3">
             <Info size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-amber-700 leading-relaxed">
-              <p className="font-bold mb-1">Database Connection Issue</p>
-              <p>{serverStatus.message || "The server is having trouble connecting to the database. Please check your AI Studio Secrets (DB_HOST, DB_USER, etc.)."}</p>
+              <p className="font-bold mb-1">{t('auth.dbIssueTitle')}</p>
+              <p>{serverStatus.message || t('auth.dbIssueDesc')}</p>
             </div>
           </div>
         )}
 
         <p className="text-zinc-500 mb-8">
           {mode === 'forgot' 
-            ? "Enter your email and we'll send you a link to reset your password."
-            : 'Save your 30-day strategies and access them anytime.'}
+            ? t('auth.forgotPasswordDesc')
+            : t('auth.saveStrategiesDesc')}
         </p>
 
         {successMessage ? (
@@ -1157,13 +1167,13 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
               onClick={() => switchMode('login')}
               className="mt-6 text-brand-primary font-bold hover:underline"
             >
-              Back to Login
+              {t('auth.backToLogin')}
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-700">Email Address</label>
+              <label className="text-sm font-semibold text-zinc-700">{t('auth.emailAddress')}</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                 <input 
@@ -1179,14 +1189,14 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
             {mode !== 'forgot' && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-zinc-700">Password</label>
+                  <label className="text-sm font-semibold text-zinc-700">{t('auth.password')}</label>
                   {mode === 'login' && (
                     <button 
                       type="button"
                       onClick={() => switchMode('forgot')}
                       className="text-xs font-bold text-brand-primary hover:underline"
                     >
-                      Forgot Password?
+                      {t('auth.forgotPassword')}
                     </button>
                   )}
                 </div>
@@ -1217,7 +1227,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
               type="submit"
               className="w-full py-4 bg-brand-secondary text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all disabled:opacity-50"
             >
-              {loading ? 'Processing...' : (mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : 'Send Reset Link')}
+              {loading ? t('auth.processing') : (mode === 'login' ? t('auth.login') : mode === 'register' ? t('auth.register') : t('auth.sendResetLink'))}
             </button>
           </form>
         )}
@@ -1228,7 +1238,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
               onClick={() => switchMode('login')}
               className="text-zinc-400 text-sm font-medium hover:text-zinc-600 block w-full"
             >
-              Back to Login
+              {t('auth.backToLogin')}
             </button>
           </div>
         )}
@@ -1238,6 +1248,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
 }
 
 function MyStrategiesView({ strategies, userContentType, onSelect, onDelete, onBack, onNew }: { strategies: any[], userContentType?: string, onSelect: (s: any) => void, onDelete: (id: number) => void, onBack: () => void, onNew: () => void }) {
+  const { t } = useTranslation();
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -1246,27 +1257,27 @@ function MyStrategiesView({ strategies, userContentType, onSelect, onDelete, onB
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
         <div>
-          <h2 className="text-4xl font-display font-bold mb-2">My Saved Strategies</h2>
-          <p className="text-zinc-500">Access all your generated 30-day content challenges.</p>
+          <h2 className="text-4xl font-display font-bold mb-2">{t('strategies.title')}</h2>
+          <p className="text-zinc-500">{t('strategies.subtitle')}</p>
         </div>
         <button 
           onClick={onNew}
           className="flex items-center gap-2 px-6 py-4 bg-brand-primary text-white rounded-2xl font-bold hover:bg-brand-secondary transition-all shadow-lg shadow-brand-primary/20"
         >
           <Plus size={20} />
-          <span>Create New Strategy</span>
+          <span>{t('strategies.createNew')}</span>
         </button>
       </div>
 
       {strategies.length === 0 ? (
         <div className="text-center py-20 bg-zinc-50 rounded-[2.5rem] border-2 border-dashed border-zinc-200">
           <History size={48} className="mx-auto text-zinc-300 mb-4" />
-          <p className="text-zinc-500 font-medium mb-8">No strategies saved yet. Start your first challenge!</p>
+          <p className="text-zinc-500 font-medium mb-8">{t('strategies.empty')}</p>
           <button 
             onClick={onNew}
             className="px-8 py-4 bg-brand-primary text-white rounded-2xl font-bold hover:bg-brand-secondary transition-all"
           >
-            Create Your First Strategy
+            {t('strategies.createFirst')}
           </button>
         </div>
       ) : (
@@ -1307,7 +1318,7 @@ function MyStrategiesView({ strategies, userContentType, onSelect, onDelete, onB
                 </span>
               )}
               <div className="flex items-center gap-2 text-brand-primary font-bold text-sm">
-                <span>View Full Plan</span>
+                <span>{t('strategies.viewFull')}</span>
                 <ArrowRight size={16} />
               </div>
             </motion.div>
@@ -1319,6 +1330,7 @@ function MyStrategiesView({ strategies, userContentType, onSelect, onDelete, onB
 }
 
 function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave: (p: UserProfile) => void, onBack: () => void }) {
+  const { t } = useTranslation();
   const [localProfile, setLocalProfile] = useState(profile);
   const [loading, setLoading] = useState(false);
 
@@ -1337,21 +1349,21 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
     >
       <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 mb-8 transition-colors">
         <ChevronLeft size={20} />
-        <span>Back</span>
+        <span>{t('back')}</span>
       </button>
 
-      <h2 className="text-4xl font-display font-bold mb-2">Profile Settings</h2>
-      <p className="text-zinc-500 mb-10">These details will be used as the default for all your new strategies.</p>
+      <h2 className="text-4xl font-display font-bold mb-2">{t('profile.title')}</h2>
+      <p className="text-zinc-500 mb-10">{t('profile.subtitle')}</p>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="space-y-4">
-          <label className="block text-sm font-semibold text-zinc-700">What is your niche?</label>
+          <label className="block text-sm font-semibold text-zinc-700">{t('form.niche.label')}</label>
           <div className="relative">
             <Target className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
             <input 
               required
               type="text"
-              placeholder="e.g. Fitness Coach for Busy Moms"
+              placeholder={t('form.niche.placeholder')}
               className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
               value={localProfile.niche}
               onChange={e => setLocalProfile({ ...localProfile, niche: e.target.value })}
@@ -1360,13 +1372,13 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
         </div>
 
         <div className="space-y-4">
-          <label className="block text-sm font-semibold text-zinc-700">What products or services do you sell?</label>
+          <label className="block text-sm font-semibold text-zinc-700">{t('form.products.label')}</label>
           <div className="relative">
             <ShoppingBag className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
             <input 
               required
               type="text"
-              placeholder="e.g. 1-on-1 Coaching, Digital Meal Plans"
+              placeholder={t('form.products.placeholder')}
               className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
               value={localProfile.products}
               onChange={e => setLocalProfile({ ...localProfile, products: e.target.value })}
@@ -1375,13 +1387,13 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
         </div>
 
         <div className="space-y-4">
-          <label className="block text-sm font-semibold text-zinc-700">What are the top 3 problems you help your clients solve?</label>
+          <label className="block text-sm font-semibold text-zinc-700">{t('form.problems.label')}</label>
           <div className="relative">
             <MessageSquare className="absolute left-4 top-4 text-zinc-400" size={20} />
             <textarea 
               required
               rows={3}
-              placeholder="e.g. No time to cook, lack of motivation, slow metabolism"
+              placeholder={t('form.problems.placeholder')}
               className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all resize-none"
               value={localProfile.problems}
               onChange={e => setLocalProfile({ ...localProfile, problems: e.target.value })}
@@ -1390,11 +1402,11 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
         </div>
 
         <div className="space-y-4">
-          <label className="block text-sm font-semibold text-zinc-700">Who is your ideal target audience?</label>
+          <label className="block text-sm font-semibold text-zinc-700">{t('form.audience.label')}</label>
           <input 
             required
             type="text"
-            placeholder="e.g. Working moms aged 30-45"
+            placeholder={t('form.audience.placeholder')}
             className="w-full px-4 py-4 bg-white border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all"
             value={localProfile.audience}
             onChange={e => setLocalProfile({ ...localProfile, audience: e.target.value })}
@@ -1406,7 +1418,7 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
           disabled={loading}
           className="w-full py-4 bg-brand-secondary text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all shadow-lg shadow-brand-secondary/10 active:scale-[0.99] disabled:opacity-50"
         >
-          {loading ? 'Saving...' : 'Save Profile Settings'}
+          {loading ? t('profile.saving') : t('profile.save')}
         </button>
       </form>
     </motion.div>
@@ -1421,6 +1433,7 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
   hasApiKey: boolean,
   onSelectKey: () => void
 }) {
+  const { t } = useTranslation();
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -1431,10 +1444,10 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
         <div>
           <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 mb-4 transition-colors">
             <ChevronLeft size={20} />
-            <span>Edit Profile</span>
+            <span>{t('results.editProfile')}</span>
           </button>
-          <h2 className="text-4xl font-display font-bold">Choose Your Series</h2>
-          <p className="text-zinc-500 mt-2 text-lg">We've generated 3 distinct directions for your 30-day challenge.</p>
+          <h2 className="text-4xl font-display font-bold">{t('results.title')}</h2>
+          <p className="text-zinc-500 mt-2 text-lg">{t('results.description')}</p>
         </div>
       </div>
 
@@ -1472,7 +1485,7 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
             </div>
             
             <div className="mb-6 flex-grow">
-              <span className="text-xs font-bold uppercase tracking-widest text-brand-primary mb-2 block">Option {i + 1}</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-brand-primary mb-2 block">{t('results.option')} {i + 1}</span>
               <h3 className="text-2xl font-display font-bold leading-tight mb-4">{option.title}</h3>
               <p className="text-zinc-500 leading-relaxed mb-4">{option.description}</p>
             </div>
@@ -1495,6 +1508,7 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
 }
 
 function SeriesDetailView({ series, token, onBack }: { series: any, token: string | null, onBack: () => void }) {
+  const { t } = useTranslation();
   const [activeDay, setActiveDay] = useState<number>(1);
   const [completedDays, setCompletedDays] = useState<number[]>(series.completed_days || []);
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
@@ -1649,14 +1663,14 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
           >
             <Download size={18} />
-            <span>Export PDF</span>
+            <span>{t('detail.exportPdf')}</span>
           </button>
           <button 
             onClick={handleShare}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-sm font-semibold"
           >
             <Share2 size={18} />
-            <span>Share</span>
+            <span>{t('detail.share')}</span>
           </button>
         </div>
       </div>
@@ -1670,12 +1684,12 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
             <div className="flex items-center gap-4 text-brand-primary font-semibold">
               <div className="flex items-center gap-2">
                 <Instagram size={20} />
-                <span>30-Day Series</span>
+                <span>{t('detail.seriesLabel')}</span>
               </div>
               {startDate && (
                 <div className="flex items-center gap-2 text-white/60 text-sm">
                   <Calendar size={16} />
-                  <span>Starts {startDate.toLocaleDateString()}</span>
+                  <span>{t('detail.starts')} {startDate.toLocaleDateString()}</span>
                 </div>
               )}
             </div>
@@ -1683,9 +1697,9 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
 
           <div className="bg-white rounded-[2rem] border border-zinc-200 p-6">
             <div className="flex items-center justify-between mb-6 px-2">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Calendar Roadmap</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.calendarRoadmap')}</h3>
               <span className="text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-full">
-                {completedDays.length}/30 Done
+                {completedDays.length}/30 {t('detail.done')}
               </span>
             </div>
             <div className="grid grid-cols-5 gap-3">
@@ -1739,8 +1753,8 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                       {activeDay}
                     </div>
                     <div>
-                      <h3 className="text-2xl font-display font-bold">Day {activeDay} Content</h3>
-                      <p className="text-zinc-500">{getDayDate(activeDay) || "Reel Strategy & Script"}</p>
+                      <h3 className="text-2xl font-display font-bold">{t('detail.dayContent', { day: activeDay })}</h3>
+                      <p className="text-zinc-500">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
                     </div>
                   </div>
                   <button 
@@ -1753,7 +1767,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                     )}
                   >
                     <CheckCircle2 size={16} />
-                    <span>{completedDays.includes(activeDay) ? "Completed" : "Mark as Done"}</span>
+                    <span>{completedDays.includes(activeDay) ? t('detail.completed') : t('detail.markDone')}</span>
                   </button>
                 </div>
 
@@ -1762,7 +1776,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <Zap size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">The Hook (Option {currentHookIndex + 1}/3)</h4>
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.hookLabel', { index: currentHookIndex + 1 })}</h4>
                       </div>
                       {currentDay.hooks && (
                         <div className="flex items-center gap-3">
@@ -1833,7 +1847,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <FileText size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Full Script (Word-for-Word)</h4>
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.scriptLabel')}</h4>
                       </div>
                       <button
                         onClick={() => setShowStoryboard(!showStoryboard)}
@@ -1845,7 +1859,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                         )}
                       >
                         <Video size={14} />
-                        <span>{showStoryboard ? "Hide Storyboard" : "Show Storyboard"}</span>
+                        <span>{showStoryboard ? t('detail.hideStoryboard') : t('detail.showStoryboard')}</span>
                       </button>
                     </div>
                     <div className="space-y-3">
@@ -1860,7 +1874,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                                   <p>{paragraph}</p>
                                   {storyboardForParagraph && (
                                     <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
-                                      <strong className="block mb-1">📹 Creator Action:</strong>
+                                      <strong className="block mb-1">{t('detail.creatorAction')}</strong>
                                       {storyboardForParagraph}
                                     </div>
                                   )}
@@ -1876,7 +1890,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                   </section>
 
                   <section>
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">Call to Action (CTA)</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">{t('detail.ctaLabel')}</h4>
                     <div className="flex items-center gap-3 p-4 rounded-xl bg-brand-primary/5 text-brand-primary font-semibold">
                       <ArrowRight size={18} />
                       <span>{currentDay.cta}</span>
@@ -1884,7 +1898,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                   </section>
 
                   <section className="pt-6 md:pt-8 border-t border-zinc-100">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">Suggested Caption</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">{t('detail.captionLabel')}</h4>
                     <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-brand-secondary text-slate-300 font-mono text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
                       {currentDay.caption}
                     </div>
@@ -1894,9 +1908,9 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                     <section className="pt-6 md:pt-8 border-t border-zinc-100">
                       <div className="flex items-center gap-2 mb-4">
                         <Play size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Inspiration Videos</h4>
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.inspirationTitle')}</h4>
                       </div>
-                      <p className="text-zinc-500 text-sm mb-4">Find videos from other creators who covered similar topics for research and inspiration.</p>
+                      <p className="text-zinc-500 text-sm mb-4">{t('detail.inspirationDesc')}</p>
                       <div className="space-y-3">
                         {currentDay.searchTerms.map((term: string, idx: number) => (
                           <a
@@ -1928,14 +1942,14 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
               className="flex items-center gap-2 px-6 py-3 rounded-xl border border-zinc-200 font-semibold disabled:opacity-30 transition-all hover:bg-zinc-50"
             >
               <ChevronLeft size={20} />
-              <span>Previous Day</span>
+              <span>{t('detail.previousDay')}</span>
             </button>
             <button 
               disabled={activeDay === 30}
               onClick={() => setActiveDay(prev => Math.min(30, prev + 1))}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-secondary text-white font-semibold disabled:opacity-30 transition-all hover:bg-slate-800"
             >
-              <span>Next Day</span>
+              <span>{t('detail.nextDay')}</span>
               <ArrowRight size={20} />
             </button>
           </div>
@@ -1948,12 +1962,12 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
             >
               <div className="text-center md:text-left">
                 <h3 className="text-2xl font-display font-bold mb-2">
-                  {membership.isMember ? "Join the Conversation" : "Join Our Private Community"}
+                  {membership.isMember ? t('detail.community.joinConversation') : t('detail.community.joinCommunity')}
                 </h3>
                 <p className="text-zinc-600 max-w-md">
                   {membership.isMember 
-                    ? "Connect with other creators in our private Discord and share your progress!" 
-                    : "Get exclusive feedback, weekly coaching calls, and a supportive network of creators."}
+                    ? t('detail.community.connectDesc')
+                    : t('detail.community.exclusiveDesc')}
                 </p>
               </div>
               <a 
@@ -1965,12 +1979,12 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                 {membership.isMember ? (
                   <>
                     <MessageSquare size={20} />
-                    <span>Join Discord Community</span>
+                    <span>{t('detail.community.joinDiscord')}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles size={20} />
-                    <span>Join the Community</span>
+                    <span>{t('detail.community.join')}</span>
                   </>
                 )}
               </a>
@@ -1983,6 +1997,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
 }
 
 function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSuccess: () => void, onBack: () => void }) {
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1992,7 +2007,7 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t('resetPassword.passwordMismatch'));
       return;
     }
     setLoading(true);
@@ -2008,10 +2023,10 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
         setSuccess(true);
       } else {
         const data = await res.json();
-        setError(data.error || 'Reset failed');
+        setError(data.error || t('resetPassword.resetFailed'));
       }
     } catch (err) {
-      setError('Connection error');
+      setError(t('resetPassword.connectionError'));
     } finally {
       setLoading(false);
     }
@@ -2028,13 +2043,13 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
           <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 size={40} />
           </div>
-          <h2 className="text-3xl font-display font-bold mb-4">Password Reset!</h2>
-          <p className="text-zinc-500 mb-8">Your password has been successfully updated. You can now login with your new password.</p>
+          <h2 className="text-3xl font-display font-bold mb-4">{t('resetPassword.success')}</h2>
+          <p className="text-zinc-500 mb-8">{t('resetPassword.successDesc')}</p>
           <button 
             onClick={onSuccess}
             className="w-full py-4 bg-brand-primary text-white rounded-2xl font-bold shadow-lg shadow-brand-primary/20"
           >
-            Go to Login
+            {t('resetPassword.goToLogin')}
           </button>
         </div>
       </motion.div>
@@ -2049,16 +2064,16 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
     >
       <button onClick={onBack} className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 mb-8 transition-colors">
         <ChevronLeft size={20} />
-        <span>Back</span>
+        <span>{t('back')}</span>
       </button>
 
       <div className="bg-white p-8 rounded-[2.5rem] border border-zinc-200 shadow-xl">
-        <h2 className="text-3xl font-display font-bold mb-2">Set New Password</h2>
-        <p className="text-zinc-500 mb-8">Enter your new password below to regain access to your account.</p>
+        <h2 className="text-3xl font-display font-bold mb-2">{t('resetPassword.title')}</h2>
+        <p className="text-zinc-500 mb-8">{t('resetPassword.subtitle')}</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-zinc-700">New Password</label>
+            <label className="text-sm font-semibold text-zinc-700">{t('resetPassword.newPassword')}</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
               <input 
@@ -2072,7 +2087,7 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-zinc-700">Confirm New Password</label>
+            <label className="text-sm font-semibold text-zinc-700">{t('resetPassword.confirmPassword')}</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
               <input 
@@ -2092,7 +2107,7 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
             type="submit"
             className="w-full py-4 bg-brand-secondary text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all disabled:opacity-50"
           >
-            {loading ? 'Updating...' : 'Reset Password'}
+            {loading ? t('resetPassword.updating') : t('resetPassword.reset')}
           </button>
         </form>
       </div>
@@ -2101,28 +2116,29 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
 }
 
 function RecommendedToolsView({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation();
   const tools = [
     {
-      name: "eCamm Live",
-      description: "The ultimate live production platform for Mac. Perfect for high-quality Reels and live streams.",
+      name: t('tools.items.ecamm.name'),
+      description: t('tools.items.ecamm.description'),
       videoPlaceholder: "https://picsum.photos/seed/ecamm/800/450",
       url: "https://www.ecamm.com/"
     },
     {
-      name: "Descript",
-      description: "AI-powered video editor that makes editing as easy as editing a text document. Great for captions and quick cuts.",
+      name: t('tools.items.descript.name'),
+      description: t('tools.items.descript.description'),
       videoPlaceholder: "https://picsum.photos/seed/descript/800/450",
       url: "https://www.descript.com/"
     },
     {
-      name: "Socialbee",
-      description: "Manage your social media posts with ease. Schedule your 30-day challenge in minutes.",
+      name: t('tools.items.socialbee.name'),
+      description: t('tools.items.socialbee.description'),
       videoPlaceholder: "https://picsum.photos/seed/socialbee/800/450",
       url: "https://socialbee.io/"
     },
     {
-      name: "YouCam Video",
-      description: "Perfect your look with AI-powered video retouching and makeup. Ideal for talking-head Reels.",
+      name: t('tools.items.youcam.name'),
+      description: t('tools.items.youcam.description'),
       videoPlaceholder: "https://picsum.photos/seed/youcam/800/450",
       url: "https://www.perfectcorp.com/consumer/apps/ycv"
     }
@@ -2139,8 +2155,8 @@ function RecommendedToolsView({ onBack }: { onBack: () => void }) {
           <ChevronLeft size={24} />
         </button>
         <div>
-          <h2 className="text-4xl font-display font-bold mb-2">Recommended Tools</h2>
-          <p className="text-zinc-500">The best software to help you record, edit, and schedule your Reels.</p>
+          <h2 className="text-4xl font-display font-bold mb-2">{t('tools.title')}</h2>
+          <p className="text-zinc-500">{t('tools.subtitle')}</p>
         </div>
       </div>
 
@@ -2175,7 +2191,7 @@ function RecommendedToolsView({ onBack }: { onBack: () => void }) {
                 rel="noopener noreferrer"
                 className="w-full py-4 bg-brand-primary text-white rounded-2xl font-bold text-center hover:bg-brand-secondary transition-all shadow-lg shadow-brand-primary/20"
               >
-                Access {tool.name}
+                {t('tools.access', { name: tool.name })}
               </a>
             </div>
           </motion.div>
