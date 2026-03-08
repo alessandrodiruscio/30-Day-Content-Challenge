@@ -321,7 +321,7 @@ async function startServer() {
   const JWT_SECRET = process.env.JWT_SECRET || "insta-challenge-30-super-stable-secret-key-2024";
 
   console.log("Configuring middleware...");
-  app.use(express.json());
+  app.use(express.json({ limit: '5mb' }));
 
   // Check Resend Config
   const resendKey = process.env.RESEND_API_KEY;
@@ -736,8 +736,8 @@ Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} 
 
 For each of the 30 days provide:
 - 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
-- 3 matching full scripts (word-for-word, 80-120 words each, formatted with line breaks for easy reading). Each script must be CONCISE, VALUABLE, and ACTIONABLE—packed with specific tips, real examples, or compelling stories that viewers can use immediately. Format with natural paragraph breaks for readability. Perfect for a 1-minute video.
-- Detailed visuals/structure (formatted with line breaks—describe what viewers see, key transitions, text overlays, b-roll suggestions, shot-by-shot flow)
+- 3 matching full scripts (word-for-word, 80-120 words each). CRITICAL: Use actual newline characters (\\n) to separate paragraphs/sentences in scripts. Each script must be CONCISE, VALUABLE, and ACTIONABLE—packed with specific tips, real examples, or compelling stories that viewers can use immediately. Perfect for a 1-minute video.
+- Detailed visuals/structure. CRITICAL: Use actual newline characters (\\n) to separate each visual element or shot description (e.g., "Shot 1: Wide angle of...\nShot 2: Close-up of...\nTransition: Fade to..."). Describe what viewers see, key transitions, text overlays, b-roll suggestions, shot-by-shot flow.
 - A clear CTA
 - A caption with relevant hashtags
 - 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research`;
@@ -748,7 +748,7 @@ For each of the 30 days provide:
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. Include natural line breaks in scripts and visuals for readability. CRITICAL: No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone. Use newlines to structure content clearly.",
+          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. CRITICAL: Include actual newline characters (\\n) in scripts and visuals fields to create readable paragraphs and separate sentences. No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone. Format scripts and visuals with \\n characters for proper line breaks in the frontend display.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
