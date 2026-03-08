@@ -943,15 +943,18 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
 
 function LoadingView({ title }: { title: string }) {
   const [progress, setProgress] = useState(0);
+  const startTimeRef = React.useRef(Date.now());
+  const estimatedDurationMs = 180000;
   
   useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) return 90;
-        const increment = Math.random() * 15;
-        return Math.min(prev + increment, 90);
-      });
-    }, 800);
+    const updateProgress = () => {
+      const elapsedMs = Date.now() - startTimeRef.current;
+      const calculatedProgress = (elapsedMs / estimatedDurationMs) * 100;
+      setProgress(Math.min(calculatedProgress, 99));
+    };
+    
+    const interval = setInterval(updateProgress, 200);
+    updateProgress();
     
     return () => clearInterval(interval);
   }, []);
@@ -980,7 +983,7 @@ function LoadingView({ title }: { title: string }) {
         <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden">
           <motion.div 
             animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: "linear" }}
             className="h-full bg-gradient-to-r from-[#DB2777] to-[#6D28D9]"
           />
         </div>
