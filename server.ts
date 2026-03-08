@@ -714,14 +714,15 @@ async function startServer() {
     next();
   }, async (req: any, res) => {
     const { concept, profile } = req.body;
-    const prompt = `Create a 30-day Instagram Reel series plan.
+    const prompt = `Create a 30-day Instagram Reel series plan. IMPORTANT: Every day must deliver immediate, standalone value—no filler, no introductions, no "coming soon" days. Start with valuable content from Day 1.
+
 Series: "${concept.title}" — ${concept.theme}
 Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} | Style: ${profile.contentType}
 
 For each of the 30 days provide:
 - 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
-- 3 matching full scripts (word-for-word, 150-250 words each). Each script must be DETAILED and VALUABLE — packed with specific tips, real examples, actionable steps, or compelling stories. The viewer should walk away having learned something concrete. Do NOT write vague or generic scripts. Every script should be so good it could stand alone as a high-performing reel.
-- Detailed visuals/structure describing exactly what the viewer sees on screen, transitions, text overlays, b-roll suggestions, and shot-by-shot breakdown
+- 3 matching full scripts (word-for-word, 80-120 words each, formatted with line breaks for easy reading). Each script must be CONCISE, VALUABLE, and ACTIONABLE—packed with specific tips, real examples, or compelling stories that viewers can use immediately. Format with natural paragraph breaks for readability. Perfect for a 1-minute video.
+- Detailed visuals/structure (formatted with line breaks—describe what viewers see, key transitions, text overlays, b-roll suggestions, shot-by-shot flow)
 - A clear CTA
 - A caption with relevant hashtags
 - 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research`;
@@ -732,7 +733,7 @@ For each of the 30 days provide:
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 150-250 words, detailed, specific, and packed with real value. No filler or vague advice — every sentence should teach, inspire, or persuade.",
+          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. Include natural line breaks in scripts and visuals for readability. CRITICAL: No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone. Use newlines to structure content clearly.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,

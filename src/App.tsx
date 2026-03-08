@@ -1833,7 +1833,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                       <FileText size={18} className="text-brand-primary" />
                       <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Full Script (Word-for-Word)</h4>
                     </div>
-                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap">
+                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
                       {displayScript}
                     </div>
                   </section>
@@ -1843,7 +1843,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                       <Video size={18} className="text-brand-primary" />
                       <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Visual Structure & Storyboard</h4>
                     </div>
-                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-zinc-700 text-sm md:text-base leading-relaxed">
+                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-zinc-700 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
                       {currentDay.visuals}
                     </div>
                   </section>
