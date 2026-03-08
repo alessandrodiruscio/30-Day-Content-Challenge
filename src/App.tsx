@@ -168,7 +168,7 @@ export default function App() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ profile })
+        body: JSON.stringify({ profile, language: i18n.language })
       });
       if (!res.ok) {
         const data = await safeJson(res);
@@ -196,7 +196,7 @@ export default function App() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ concept, profile })
+        body: JSON.stringify({ concept, profile, language: i18n.language })
       });
       if (!seriesRes.ok) {
         const data = await safeJson(seriesRes);

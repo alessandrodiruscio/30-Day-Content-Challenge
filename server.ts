@@ -676,7 +676,8 @@ async function startServer() {
 
   // Gemini Routes
   app.post(["/api/gemini/generate-options", "/api/gemini/generate-options/"], authenticateToken, async (req: any, res) => {
-    const { profile } = req.body;
+    const { profile, language = 'en' } = req.body;
+    const languageInstruction = language === 'es' ? 'Respond in Spanish.' : 'Respond in English.';
     const prompt = `
       You are an expert Instagram Growth Strategist. 
       Create 3 distinct high-level concepts for a 30-day Instagram Reel series for a creator with the following profile:
@@ -690,6 +691,8 @@ async function startServer() {
       IMPORTANT: Each of the 3 options should explore a DIFFERENT "Angle" or "Challenge Type" even within the preferred style. 
 
       Return only the high-level concepts (Title, Description, Target Audience, and Theme).
+      
+      ${languageInstruction}
     `;
 
     try {
@@ -728,7 +731,10 @@ async function startServer() {
     res.setTimeout(270000);
     next();
   }, async (req: any, res) => {
-    const { concept, profile } = req.body;
+    const { concept, profile, language = 'en' } = req.body;
+    const languageInstruction = language === 'es' 
+      ? 'Respond completely in Spanish. All hooks, scripts, CTAs, captions, and descriptions must be in Spanish.' 
+      : 'Respond in English.';
     const prompt = `Create a 30-day Instagram Reel series plan. IMPORTANT: Every day must deliver immediate, standalone value—no filler, no introductions, no "coming soon" days. Start with valuable content from Day 1.
 
 Series: "${concept.title}" — ${concept.theme}
@@ -740,7 +746,9 @@ For each of the 30 days provide:
 - Storyboard with creator actions (4-5 actions total, one per script segment). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic] from Descript" or link "Get b-roll at escape9to5.life/descript". Use actual newline characters (\\n) to separate each action, matching the order of script segments (separated by \\n\\n).
 - A clear CTA
 - A caption with relevant hashtags
-- 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research`;
+- 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research
+
+${languageInstruction}`;
 
     try {
       const ai = getAI();
@@ -748,7 +756,7 @@ For each of the 30 days provide:
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: "Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. CRITICAL: (1) Separate script segments with double newlines (\\n\\n)—aim for 4-5 segments per script. (2) In visuals field: ONLY describe creator actions for each segment (smile, point, nod, lean, etc.). NO text overlays. If b-roll is useful, say 'Use b-roll of X from Descript' or link to escape9to5.life/descript. (3) Provide 4-5 creator actions total, one per script segment, separated by single newline (\\n), matching script order. No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone.",
+          systemInstruction: `Respond with valid JSON matching the schema. Generate all 30 days. Each script MUST be 80-120 words, concise, and packed with real value. CRITICAL: (1) Separate script segments with double newlines (\\n\\n)—aim for 4-5 segments per script. (2) In visuals field: ONLY describe creator actions for each segment (smile, point, nod, lean, etc.). NO text overlays. If b-roll is useful, say 'Use b-roll of X from Descript' or link to escape9to5.life/descript. (3) Provide 4-5 creator actions total, one per script segment, separated by single newline (\\n), matching script order. No filler days, no introductions—every day from Day 1 must be immediately valuable and standalone. ${language === 'es' ? 'Generate all content completely in Spanish.' : ''}`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
