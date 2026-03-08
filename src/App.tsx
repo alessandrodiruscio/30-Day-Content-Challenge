@@ -1498,6 +1498,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
   const [activeDay, setActiveDay] = useState<number>(1);
   const [completedDays, setCompletedDays] = useState<number[]>(series.completed_days || []);
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
+  const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const currentDay = series.days.find((d: any) => d.day === activeDay) || series.days[0];
 
@@ -1829,22 +1830,48 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
                   </section>
 
                   <section>
-                    <div className="flex items-center gap-2 mb-4">
-                      <FileText size={18} className="text-brand-primary" />
-                      <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Full Script (Word-for-Word)</h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <FileText size={18} className="text-brand-primary" />
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Full Script (Word-for-Word)</h4>
+                      </div>
+                      <button
+                        onClick={() => setShowStoryboard(!showStoryboard)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                          showStoryboard
+                            ? "bg-brand-primary text-white"
+                            : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                        )}
+                      >
+                        <Video size={14} />
+                        <span>{showStoryboard ? "Hide Storyboard" : "Show Storyboard"}</span>
+                      </button>
                     </div>
-                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
-                      {displayScript}
-                    </div>
-                  </section>
-
-                  <section>
-                    <div className="flex items-center gap-2 mb-4">
-                      <Video size={18} className="text-brand-primary" />
-                      <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Visual Structure & Storyboard</h4>
-                    </div>
-                    <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-zinc-700 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
-                      {currentDay.visuals}
+                    <div className="space-y-3">
+                      <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
+                        {showStoryboard ? (
+                          <div className="space-y-3">
+                            {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
+                              const storyboardLines = currentDay.visuals.split('\n');
+                              const storyboardForParagraph = storyboardLines[idx];
+                              return (
+                                <div key={idx}>
+                                  <p>{paragraph}</p>
+                                  {storyboardForParagraph && (
+                                    <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
+                                      <strong className="block mb-1">📹 Creator Action:</strong>
+                                      {storyboardForParagraph}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          displayScript
+                        )}
+                      </div>
                     </div>
                   </section>
 
