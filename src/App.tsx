@@ -35,8 +35,7 @@ import {
   EyeOff,
   Info,
   Trash2,
-  ExternalLink,
-  Globe
+  ExternalLink
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -335,8 +334,8 @@ export default function App() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zinc-500 hover:text-brand-primary hover:bg-zinc-50 transition-all border border-zinc-200"
               title="Switch language"
             >
-              <Globe size={14} />
-              <span>{i18n.language === 'en' ? 'ES' : 'EN'}</span>
+              <span>{i18n.language === 'en' ? '🇺🇸' : '🇪🇸'}</span>
+              <span>{i18n.language === 'en' ? 'EN' : 'ES'}</span>
             </button>
             {user ? (
               <div className="relative">
