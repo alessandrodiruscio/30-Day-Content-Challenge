@@ -512,6 +512,11 @@ export default function App() {
               strategies={savedStrategies}
               userContentType={profile.contentType}
               onSelect={(s) => {
+                // Validate strategy data
+                if (!s.data || !s.data.days || !Array.isArray(s.data.days) || s.data.days.length === 0) {
+                  setError('This strategy data is corrupted or incomplete. Please delete and recreate it.');
+                  return;
+                }
                 setSelectedSeries({
                   ...s.data,
                   id: s.id,
