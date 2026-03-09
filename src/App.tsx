@@ -140,7 +140,15 @@ export default function App() {
 
   const handleGeminiError = (err: any) => {
     console.error("Gemini Error:", err);
-    setError(err.message || 'Something went wrong while generating content.');
+    let message = err.message || 'Something went wrong while generating content.';
+    // Make error messages user-friendly
+    if (message.includes('timeout') || message.includes('took too long')) {
+      message = "Generation took too long. Please try a different topic or try again later.";
+    }
+    if (message.includes('502') || message.includes('500') || message.includes('503')) {
+      message = "Service temporarily unavailable. Please wait a moment and try again.";
+    }
+    setError(message);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -189,17 +197,25 @@ export default function App() {
     setStep('loading_series');
     setError(null);
     try {
-      const seriesRes = await robustFetch('/api/gemini/generate-series', {
+      // Add 5-minute absolute timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Strategy generation took too long. Please try again.')), 300000)
+      );
+      
+      const seriesPromise = robustFetch('/api/gemini/generate-series', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ concept, profile, language: i18n.language })
-      }, 2, 1000, 600000);
+      }, 2, 1000, 300000);
+      
+      const seriesRes = await Promise.race([seriesPromise, timeoutPromise]) as Response;
+      
       if (!seriesRes.ok) {
         const data = await safeJson(seriesRes);
-        throw new Error(data.error || 'Failed to generate series');
+        throw new Error(data.error || `Generation failed (${seriesRes.status})`);
       }
       const fullSeries = await safeJson(seriesRes);
       const seriesWithMeta = {
@@ -213,6 +229,7 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 4500));
       setStep('detail');
     } catch (err: any) {
+      console.error("Generation error:", err);
       handleGeminiError(err);
       setStep('results');
     }

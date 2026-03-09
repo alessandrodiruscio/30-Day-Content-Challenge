@@ -761,7 +761,7 @@ Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} 
 
 For each of the 30 days provide:
 - 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
-- 3 matching full scripts (word-for-word, EXACTLY 80-120 words each, NOT shorter). CRITICAL: Use actual double newline characters (\\n\\n) to separate 4-5 distinct segments in scripts. REQUIRED: Each script MUST include multiple line breaks (\\n\\n) separating content. Each script must be PACKED with specific, actionable tips, real examples, and compelling stories that viewers can use immediately. MINIMUM 4-5 segments per script, each separated by \\n\\n. Do NOT generate short scripts—every script must reach 80-120 words with substantial content and clear segment breaks.
+- 3 matching full scripts (word-for-word, 80-120 words each). Include 3-4 segments separated by \\n\\n (double newlines). Packed with specific tips, examples, and actionable advice. No filler.
 - Storyboard with creator actions (4-5 actions total, one per script segment). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic] from Descript" or link "Get b-roll at escape9to5.life/descript". Use actual newline characters (\\n) to separate each action, matching the order of script segments (separated by \\n\\n).
 - A clear CTA
 - A caption with relevant hashtags
@@ -775,7 +775,7 @@ ${languageInstruction}`;
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: `Respond with valid JSON matching the schema. Generate all 30 days with LONG, DETAILED scripts. CRITICAL REQUIREMENTS: (1) Every script MUST be EXACTLY 80-120 words minimum—NEVER generate short scripts. Include 4-5 distinct segments separated by double newlines (\\n\\n). (2) Each segment should have 15-25 words with specific tips, examples, or actionable advice. (3) Include line breaks (\\n\\n) between all segments to create visible structure. (4) In visuals field: ONLY describe creator actions (smile, point, nod, lean, etc.), one per segment. (5) No filler days, no introductions—every day from Day 1 must contain substantial, valuable content with proper formatting. ${language === 'es' ? 'Generate all content completely in Spanish.' : ''}`,
+          systemInstruction: `Respond with valid JSON. Generate all 30 days. Scripts: 80-120 words each, 3-4 segments with \\n\\n breaks. Visuals: 3-4 creator actions only (smile, lean, point, nod). No text overlays. ${language === 'es' ? 'Spanish only.' : ''}`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
