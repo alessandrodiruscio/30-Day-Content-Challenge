@@ -512,11 +512,6 @@ export default function App() {
               strategies={savedStrategies}
               userContentType={profile.contentType}
               onSelect={(s) => {
-                // Validate strategy data
-                if (!s.data || !s.data.days || !Array.isArray(s.data.days) || s.data.days.length === 0) {
-                  setError('This strategy data is corrupted or incomplete. Please delete and recreate it.');
-                  return;
-                }
                 setSelectedSeries({
                   ...s.data,
                   id: s.id,
@@ -1518,6 +1513,29 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
 
 function SeriesDetailView({ series, token, onBack }: { series: any, token: string | null, onBack: () => void }) {
   const { t } = useTranslation();
+  
+  // Check if series data is valid
+  if (!series || !series.days || !Array.isArray(series.days) || series.days.length === 0) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="max-w-2xl mx-auto px-6 py-12 text-center"
+      >
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8">
+          <h2 className="text-2xl font-display font-bold text-red-600 mb-4">Error Loading Strategy</h2>
+          <p className="text-red-600 mb-6">This strategy data is corrupted or incomplete. Please delete and create a new one.</p>
+          <button 
+            onClick={onBack}
+            className="px-8 py-3 bg-brand-primary text-white rounded-xl font-bold hover:bg-brand-secondary transition-all"
+          >
+            Back to Strategies
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+  
   const [activeDay, setActiveDay] = useState<number>(1);
   const [completedDays, setCompletedDays] = useState<number[]>(series.completed_days || []);
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
