@@ -327,7 +327,10 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep('landing')}>
             <img src="/favicon.png" alt="" className="w-6 h-6" />
-            <span className="font-display font-bold text-xl tracking-tight">{t('appName')}</span>
+            <span className="font-display font-bold text-xl tracking-tight">
+              <span className="md:hidden">30-Day Challenge</span>
+              <span className="hidden md:inline">{t('appName')}</span>
+            </span>
           </div>
           
           <div className="flex items-center gap-4">
