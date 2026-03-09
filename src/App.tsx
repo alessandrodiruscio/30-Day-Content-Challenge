@@ -196,7 +196,7 @@ export default function App() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ concept, profile, language: i18n.language })
-      });
+      }, 2, 1000, 600000);
       if (!seriesRes.ok) {
         const data = await safeJson(seriesRes);
         throw new Error(data.error || 'Failed to generate series');
@@ -963,7 +963,7 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
   const { t } = useTranslation();
   const [progress, setProgress] = useState(0);
   const startTimeRef = React.useRef(Date.now());
-  const estimatedDurationMs = 120000; // 2 minutes to reach 99%
+  const estimatedDurationMs = 480000; // 8 minutes to reach 99%
   
   useEffect(() => {
     if (!showPercentage) return;
