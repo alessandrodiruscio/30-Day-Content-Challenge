@@ -229,6 +229,8 @@ export default function App() {
         }
       }
       
+      // Show pulsing "Refining..." text for 4.5 seconds before transitioning
+      await new Promise(resolve => setTimeout(resolve, 4500));
       setStep('detail');
     } catch (err: any) {
       handleGeminiError(err);
@@ -952,7 +954,7 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
   const { t } = useTranslation();
   const [progress, setProgress] = useState(0);
   const startTimeRef = React.useRef(Date.now());
-  const estimatedDurationMs = 180000;
+  const estimatedDurationMs = 300000; // 5 minutes to reach 99% slowly
   
   useEffect(() => {
     if (!showPercentage) return;
@@ -963,7 +965,7 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
       setProgress(Math.min(calculatedProgress, 99));
     };
     
-    const interval = setInterval(updateProgress, 200);
+    const interval = setInterval(updateProgress, 100);
     updateProgress();
     
     return () => clearInterval(interval);
