@@ -223,7 +223,35 @@ export default function App() {
         start_date: profile.startDate,
         completed_days: []
       };
-      setSelectedSeries(seriesWithMeta);
+      
+      // Auto-save if logged in
+      let savedId = null;
+      if (token) {
+        try {
+          const saveRes = await robustFetch('/api/strategies', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              title: fullSeries.title,
+              data: { ...fullSeries, contentType: profile.contentType },
+              start_date: profile.startDate
+            })
+          });
+          if (saveRes.ok) {
+            const savedData = await safeJson(saveRes);
+            savedId = savedData.id;
+            setSavedStrategies(prev => [savedData, ...prev]);
+          }
+        } catch (err) {
+          console.error("Failed to auto-save strategy:", err);
+        }
+      }
+      
+      const finalSeries = { ...seriesWithMeta, id: savedId };
+      setSelectedSeries(finalSeries);
       
       // Show pulsing "Refining..." text for 4.5 seconds before transitioning
       await new Promise(resolve => setTimeout(resolve, 4500));
@@ -1709,19 +1737,6 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       <div className="flex items-center justify-between mb-12 print:hidden">
         <div />
         <div className="flex gap-4">
-          {token && !series.id && (
-            <button 
-              onClick={() => {
-                setSaving(true);
-                onSave(series).finally(() => setSaving(false));
-              }}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-primary text-white hover:bg-brand-secondary transition-all text-sm font-semibold disabled:opacity-50"
-            >
-              <Plus size={18} />
-              <span>{saving ? 'Saving...' : 'Save to My Strategies'}</span>
-            </button>
-          )}
           <button 
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
