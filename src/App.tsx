@@ -209,26 +209,6 @@ export default function App() {
       };
       setSelectedSeries(seriesWithMeta);
       
-      // Save to backend if logged in
-      if (token) {
-        try {
-          await robustFetch('/api/strategies', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              title: fullSeries.title,
-              data: { ...fullSeries, contentType: profile.contentType },
-              start_date: profile.startDate
-            })
-          });
-        } catch (saveErr) {
-          console.error("Failed to save strategy:", saveErr);
-        }
-      }
-      
       // Show pulsing "Refining..." text for 4.5 seconds before transitioning
       await new Promise(resolve => setTimeout(resolve, 4500));
       setStep('detail');
@@ -580,7 +560,33 @@ export default function App() {
               key="detail" 
               series={selectedSeries} 
               token={token}
-              onBack={() => setStep('results')} 
+              profile={profile}
+              onBack={() => setStep('results')}
+              onSave={async (series) => {
+                if (!token) return;
+                try {
+                  const res = await robustFetch('/api/strategies', {
+                    method: 'POST',
+                    headers: { 
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                      title: series.title,
+                      data: { ...series, contentType: profile.contentType },
+                      start_date: series.start_date
+                    })
+                  });
+                  if (res.ok) {
+                    const newStrategy = await safeJson(res);
+                    setSavedStrategies(prev => [newStrategy, ...prev]);
+                    setStep('my_strategies');
+                  }
+                } catch (err) {
+                  console.error("Failed to save strategy:", err);
+                  alert('Failed to save strategy. Please try again.');
+                }
+              }}
             />
           )}
         </AnimatePresence>
@@ -1511,8 +1517,9 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
   );
 }
 
-function SeriesDetailView({ series, token, onBack }: { series: any, token: string | null, onBack: () => void }) {
+function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: any, token: string | null, profile: UserProfile, onBack: () => void, onSave: (s: any) => Promise<void> }) {
   const { t } = useTranslation();
+  const [saving, setSaving] = useState(false);
   
   // Check if series data is valid
   if (!series || !series.days || !Array.isArray(series.days) || series.days.length === 0) {
@@ -1529,7 +1536,7 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
             onClick={onBack}
             className="px-8 py-3 bg-brand-primary text-white rounded-xl font-bold hover:bg-brand-secondary transition-all"
           >
-            Back to Strategies
+            Back to Try Again
           </button>
         </div>
       </motion.div>
@@ -1685,6 +1692,19 @@ function SeriesDetailView({ series, token, onBack }: { series: any, token: strin
       <div className="flex items-center justify-between mb-12 print:hidden">
         <div />
         <div className="flex gap-4">
+          {token && !series.id && (
+            <button 
+              onClick={() => {
+                setSaving(true);
+                onSave(series).finally(() => setSaving(false));
+              }}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-primary text-white hover:bg-brand-secondary transition-all text-sm font-semibold disabled:opacity-50"
+            >
+              <Plus size={18} />
+              <span>{saving ? 'Saving...' : 'Save to My Strategies'}</span>
+            </button>
+          )}
           <button 
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
