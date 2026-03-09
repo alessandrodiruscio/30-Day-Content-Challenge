@@ -554,7 +554,15 @@ async function startServer() {
         'INSERT INTO strategies (user_id, title, data, start_date) VALUES (?, ?, ?, ?)',
         [req.user.id, title, dataStr, start_date]
       );
-      res.json({ success: true, id: result[0].insertId });
+      const insertedId = result[0].insertId;
+      res.json({
+        id: insertedId,
+        title,
+        data,
+        start_date,
+        completed_days: [],
+        created_at: new Date().toISOString()
+      });
     } catch (error: any) {
       console.error("Failed to save strategy:", error);
       res.status(500).json({ error: error.message || "Server error" });
