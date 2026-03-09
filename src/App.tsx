@@ -963,7 +963,7 @@ function LoadingView({ title, showPercentage = false }: { title: string, showPer
   const { t } = useTranslation();
   const [progress, setProgress] = useState(0);
   const startTimeRef = React.useRef(Date.now());
-  const estimatedDurationMs = 480000; // 8 minutes to reach 99%
+  const estimatedDurationMs = 180000; // 3 minutes to reach 99%
   
   useEffect(() => {
     if (!showPercentage) return;
