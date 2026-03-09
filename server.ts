@@ -95,13 +95,22 @@ async function initDatabase() {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         user_id BIGINT,
         title VARCHAR(255) NOT NULL,
-        data TEXT NOT NULL,
+        data LONGTEXT NOT NULL,
         start_date VARCHAR(255),
         completed_days TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+    
+    // Upgrade existing tables from TEXT to LONGTEXT
+    try {
+      await pool.execute(`ALTER TABLE strategies MODIFY data LONGTEXT NOT NULL`);
+    } catch (alterErr: any) {
+      if (!alterErr.message.includes("Duplicate")) {
+        console.warn("Could not upgrade strategies table column:", alterErr.message);
+      }
+    }
 
     console.log("✅ MySQL database initialized successfully.");
   } catch (error) {
@@ -540,13 +549,15 @@ async function startServer() {
     const { title, data, start_date } = req.body;
     try {
       const db = getPool();
-      await db.execute(
+      const dataStr = JSON.stringify(data);
+      const result: any = await db.execute(
         'INSERT INTO strategies (user_id, title, data, start_date) VALUES (?, ?, ?, ?)',
-        [req.user.id, title, JSON.stringify(data), start_date]
+        [req.user.id, title, dataStr, start_date]
       );
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Server error" });
+      res.json({ success: true, id: result[0].insertId });
+    } catch (error: any) {
+      console.error("Failed to save strategy:", error);
+      res.status(500).json({ error: error.message || "Server error" });
     }
   });
 
