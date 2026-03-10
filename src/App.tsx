@@ -1623,11 +1623,17 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   };
 
   const toggleDayComplete = async (day: number) => {
-    const newCompleted = completedDays.includes(day)
-      ? completedDays.filter(d => d !== day)
-      : [...completedDays, day];
+    const isMarking = !completedDays.includes(day);
+    const newCompleted = isMarking
+      ? [...completedDays, day]
+      : completedDays.filter(d => d !== day);
     
     setCompletedDays(newCompleted);
+
+    // Auto-advance to next day when marking as done
+    if (isMarking && day < 30) {
+      setActiveDay(day + 1);
+    }
 
     if (token && series.id) {
       try {
@@ -1738,7 +1744,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 print:p-0">
       <div className="flex items-center justify-between mb-12 print:hidden">
-        <div />
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
+        >
+          <ChevronLeft size={18} />
+          <span>Back to Strategies</span>
+        </button>
         <div className="flex gap-4">
           <button 
             onClick={handleExportPDF}
