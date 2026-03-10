@@ -35,7 +35,9 @@ import {
   EyeOff,
   Info,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  LayoutGrid,
+  Image as ImageIcon
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -1592,6 +1594,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [completedDays, setCompletedDays] = useState<number[]>(series.completed_days || []);
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const currentDay = series.days.find((d: any) => d.day === activeDay) || series.days[0];
 
@@ -1926,46 +1929,162 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <FileText size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.scriptLabel')}</h4>
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">
+                          {viewMode === 'carousel' ? 'Carousel Slides' : t('detail.scriptLabel')}
+                        </h4>
                       </div>
-                      <button
-                        onClick={() => setShowStoryboard(!showStoryboard)}
-                        className={cn(
-                          "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          showStoryboard
-                            ? "bg-brand-primary text-white"
-                            : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                      <div className="flex items-center gap-2">
+                        {/* Reel/Carousel toggle */}
+                        <div className="flex rounded-lg overflow-hidden border border-zinc-200">
+                          <button
+                            onClick={() => setViewMode('reel')}
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all",
+                              viewMode === 'reel'
+                                ? "bg-brand-primary text-white"
+                                : "bg-white text-zinc-600 hover:bg-zinc-50"
+                            )}
+                          >
+                            <Video size={13} />
+                            <span>Reel</span>
+                          </button>
+                          <button
+                            onClick={() => setViewMode('carousel')}
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all border-l border-zinc-200",
+                              viewMode === 'carousel'
+                                ? "bg-brand-primary text-white"
+                                : "bg-white text-zinc-600 hover:bg-zinc-50"
+                            )}
+                          >
+                            <LayoutGrid size={13} />
+                            <span>Carousel</span>
+                          </button>
+                        </div>
+                        {/* Storyboard toggle — only in reel mode */}
+                        {viewMode === 'reel' && (
+                          <button
+                            onClick={() => setShowStoryboard(!showStoryboard)}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                              showStoryboard
+                                ? "bg-brand-primary text-white"
+                                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                            )}
+                          >
+                            <Video size={14} />
+                            <span>{showStoryboard ? t('detail.hideStoryboard') : t('detail.showStoryboard')}</span>
+                          </button>
                         )}
-                      >
-                        <Video size={14} />
-                        <span>{showStoryboard ? t('detail.hideStoryboard') : t('detail.showStoryboard')}</span>
-                      </button>
+                      </div>
                     </div>
-                    <div className="space-y-3">
-                      <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
-                        {showStoryboard ? (
-                          <div className="space-y-3">
-                            {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
-                              const storyboardLines = currentDay.visuals.split('\n');
-                              const storyboardForParagraph = storyboardLines[idx];
-                              return (
-                                <div key={idx}>
-                                  <p>{paragraph}</p>
-                                  {storyboardForParagraph && (
-                                    <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
-                                      <strong className="block mb-1">{t('detail.creatorAction')}</strong>
-                                      {storyboardForParagraph}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+
+                    {viewMode === 'carousel' ? (
+                      /* ── CAROUSEL VIEW ── */
+                      <div className="space-y-4">
+                        {/* Cover slide */}
+                        <div className="rounded-2xl border-2 border-brand-primary/20 bg-brand-primary/5 overflow-hidden">
+                          <div className="flex items-center gap-2 px-4 py-2 bg-brand-primary/10 border-b border-brand-primary/20">
+                            <span className="text-xs font-bold text-brand-primary uppercase tracking-widest">Slide 1 — Cover</span>
                           </div>
-                        ) : (
-                          displayScript
-                        )}
+                          <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
+                              <p className="text-base md:text-lg font-semibold text-zinc-900 leading-snug">"{displayHook}"</p>
+                            </div>
+                            <div className="md:border-l md:border-brand-primary/20 md:pl-4">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <ImageIcon size={13} className="text-brand-primary" />
+                                <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                              </div>
+                              <p className="text-sm text-zinc-600 italic">Bold title card with hook text overlaid on a colorful or brand-colored background. Use a striking visual or gradient.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Content slides — one per script paragraph */}
+                        {displayScript.split('\n\n').filter((p: string) => p.trim()).map((paragraph: string, idx: number) => {
+                          const storyboardLines = currentDay.visuals ? currentDay.visuals.split('\n') : [];
+                          const visualCue = storyboardLines[idx] || '';
+                          // Adapt creator action → image suggestion
+                          const imageSuggestion = visualCue
+                            ? visualCue.replace(/^(Use b-roll of|Get b-roll at)/i, 'Stock photo or illustration of')
+                                .replace(/Smile at camera/i, 'Friendly illustrated character or stock photo of a person smiling')
+                                .replace(/Lean forward/i, 'Close-up illustration or photo conveying intensity/focus')
+                                .replace(/Raise eyebrows/i, 'Illustration or photo showing surprise or curiosity')
+                                .replace(/Nod head/i, 'Illustration or photo of someone in agreement')
+                                .replace(/Point (at|to)/i, 'Illustration or photo of someone pointing toward key info')
+                            : 'Relevant stock photo, infographic, or illustration matching the slide topic';
+                          return (
+                            <div key={idx} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
+                              <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
+                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
+                              </div>
+                              <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
+                                  <p className="text-sm md:text-base text-zinc-800 leading-relaxed">{paragraph}</p>
+                                </div>
+                                <div className="md:border-l md:border-zinc-100 md:pl-4">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <ImageIcon size={13} className="text-brand-primary" />
+                                    <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                  </div>
+                                  <p className="text-sm text-zinc-600 italic">{imageSuggestion}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* CTA slide */}
+                        <div className="rounded-2xl border-2 border-zinc-900/20 bg-zinc-900 overflow-hidden">
+                          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border-b border-zinc-700">
+                            <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Last Slide — CTA</span>
+                          </div>
+                          <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
+                              <p className="text-base md:text-lg font-semibold text-white leading-snug">{currentDay.cta}</p>
+                            </div>
+                            <div className="md:border-l md:border-zinc-700 md:pl-4">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <ImageIcon size={13} className="text-brand-primary" />
+                                <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                              </div>
+                              <p className="text-sm text-zinc-400 italic">Your profile photo or brand logo centered on a solid brand-colored background, with CTA text below.</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* ── REEL VIEW ── */
+                      <div className="space-y-3">
+                        <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
+                          {showStoryboard ? (
+                            <div className="space-y-3">
+                              {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
+                                const storyboardLines = currentDay.visuals.split('\n');
+                                const storyboardForParagraph = storyboardLines[idx];
+                                return (
+                                  <div key={idx}>
+                                    <p>{paragraph}</p>
+                                    {storyboardForParagraph && (
+                                      <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
+                                        <strong className="block mb-1">{t('detail.creatorAction')}</strong>
+                                        {storyboardForParagraph}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            displayScript
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </section>
 
                   <section>
