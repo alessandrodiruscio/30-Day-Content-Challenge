@@ -1595,7 +1595,47 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
+  const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>({});
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
+  
+  const completionTasks = [
+    { id: 'social', label: 'Shared on social media' },
+    { id: 'community', label: 'Posted in community' },
+    { id: 'engage', label: 'Engaged with 3+ creators' }
+  ];
+  
+  const toggleTaskCheckbox = (day: number, taskId: string) => {
+    setDayChecklist(prev => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        [taskId]: !prev[day]?.[taskId]
+      }
+    }));
+    
+    // Check if all tasks are now completed
+    const updatedChecklist = {
+      ...dayChecklist,
+      [day]: {
+        ...dayChecklist[day],
+        [taskId]: !dayChecklist[day]?.[taskId]
+      }
+    };
+    const allChecked = completionTasks.every(task => updatedChecklist[day]?.[task.id]);
+    
+    if (allChecked) {
+      toggleDayComplete(day);
+    }
+  };
+  
+  const getDayChecklistStatus = (day: number) => {
+    const checklist = dayChecklist[day] || {};
+    return {
+      checklist,
+      allChecked: completionTasks.every(task => checklist[task.id]),
+      checkedCount: completionTasks.filter(task => checklist[task.id]).length
+    };
+  };
   const currentDay = series.days.find((d: any) => d.day === activeDay) || series.days[0];
 
   const currentHookIndex = hookIndices[activeDay] || 0;
@@ -1851,19 +1891,42 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                       <p className="text-zinc-500">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => toggleDayComplete(activeDay)}
-                    className={cn(
-                      "flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold uppercase tracking-widest transition-all",
-                      completedDays.includes(activeDay)
-                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                        : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200"
-                    )}
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>{completedDays.includes(activeDay) ? t('detail.completed') : t('detail.markDone')}</span>
-                  </button>
                 </div>
+
+                {/* Day completion checklist */}
+                {!completedDays.includes(activeDay) && (
+                  <div className="bg-gradient-to-r from-brand-primary/5 to-blue-50 border border-brand-primary/10 rounded-2xl p-6">
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Mark this day complete</h4>
+                    <div className="space-y-3">
+                      {completionTasks.map(task => (
+                        <label key={task.id} className="flex items-center gap-3 cursor-pointer group p-3 rounded-lg hover:bg-white/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={dayChecklist[activeDay]?.[task.id] || false}
+                            onChange={() => toggleTaskCheckbox(activeDay, task.id)}
+                            className="w-5 h-5 rounded border-2 border-zinc-300 checked:bg-emerald-500 checked:border-emerald-500 cursor-pointer transition-all"
+                          />
+                          <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900 transition-colors">{task.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-brand-primary/10">
+                      <p className="text-xs text-zinc-500">
+                        <span className="font-semibold text-zinc-700">{getDayChecklistStatus(activeDay).checkedCount}/3</span> complete
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {completedDays.includes(activeDay) && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 flex items-center gap-3">
+                    <CheckCircle2 size={24} className="text-emerald-600 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-emerald-900">Day {activeDay} Complete!</h4>
+                      <p className="text-sm text-emerald-700">Great work! All tasks checked off.</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-8 md:space-y-10">
                   <section>
