@@ -2004,17 +2004,42 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
                         {/* Content slides — one per script paragraph */}
                         {displayScript.split('\n\n').filter((p: string) => p.trim()).map((paragraph: string, idx: number) => {
-                          const storyboardLines = currentDay.visuals ? currentDay.visuals.split('\n') : [];
-                          const visualCue = storyboardLines[idx] || '';
-                          // Adapt creator action → image suggestion
-                          const imageSuggestion = visualCue
-                            ? visualCue.replace(/^(Use b-roll of|Get b-roll at)/i, 'Stock photo or illustration of')
-                                .replace(/Smile at camera/i, 'Friendly illustrated character or stock photo of a person smiling')
-                                .replace(/Lean forward/i, 'Close-up illustration or photo conveying intensity/focus')
-                                .replace(/Raise eyebrows/i, 'Illustration or photo showing surprise or curiosity')
-                                .replace(/Nod head/i, 'Illustration or photo of someone in agreement')
-                                .replace(/Point (at|to)/i, 'Illustration or photo of someone pointing toward key info')
-                            : 'Relevant stock photo, infographic, or illustration matching the slide topic';
+                          // Helper: Shorten copy to ~50% and add strategic line breaks
+                          const shortenCopy = (text: string) => {
+                            const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+                            const targetSentences = Math.max(1, Math.ceil(sentences.length / 2));
+                            const shortened = sentences.slice(0, targetSentences).join('').trim();
+                            // Add line break after first sentence if there are multiple remaining
+                            if (sentences.slice(0, targetSentences).length > 1) {
+                              const firstPeriod = shortened.indexOf('.');
+                              if (firstPeriod !== -1) {
+                                return shortened.substring(0, firstPeriod + 1) + '\n\n' + shortened.substring(firstPeriod + 1).trim();
+                              }
+                            }
+                            return shortened;
+                          };
+
+                          // Helper: Generate semantic image suggestion based on content
+                          const generateImageSuggestion = (text: string) => {
+                            const lower = text.toLowerCase();
+                            if (lower.includes('sell') || lower.includes('selling') || lower.includes('sell your')) return 'A handshake, two hands connecting, or illustration of helping/partnership';
+                            if (lower.includes('money') || lower.includes('price') || lower.includes('cost')) return 'Dollar sign, coins, or abstract wealth/growth visualization';
+                            if (lower.includes('connection') || lower.includes('connect')) return 'Network nodes, interconnected circles, or bridges';
+                            if (lower.includes('value') || lower.includes('valuable')) return 'Gem, star, or upward arrow symbolizing worth';
+                            if (lower.includes('audience') || lower.includes('customer')) return 'People/crowd illustration, megaphone, or group silhouettes';
+                            if (lower.includes('trust') || lower.includes('believe')) return 'Heart, shield, or lock symbolizing security/trust';
+                            if (lower.includes('transform') || lower.includes('change') || lower.includes('improve')) return 'Butterfly, growth plant, or ascending path/arrow';
+                            if (lower.includes('story') || lower.includes('narrative')) return 'Open book, story bubbles, or narrative illustration';
+                            if (lower.includes('problem') || lower.includes('solve')) return 'Lightbulb, puzzle piece, or check mark';
+                            if (lower.includes('authentic') || lower.includes('genuine') || lower.includes('real')) return 'Mirror, fingerprint, or authentic seal/badge';
+                            if (lower.includes('engage') || lower.includes('interaction')) return 'Speech bubbles, conversation illustration, or two-way arrows';
+                            if (lower.includes('build') || lower.includes('create')) return 'Blueprint, construction, or building blocks';
+                            return 'Relevant infographic, icon, or illustration matching the concept';
+                          };
+
+                          const shortCopy = shortenCopy(paragraph);
+                          const imageSuggestion = generateImageSuggestion(paragraph);
+
                           return (
                             <div key={idx} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
                               <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
@@ -2023,7 +2048,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                               <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
-                                  <p className="text-sm md:text-base text-zinc-800 leading-relaxed">{paragraph}</p>
+                                  <p className="text-sm md:text-base text-zinc-800 leading-relaxed whitespace-pre-wrap">{shortCopy}</p>
                                 </div>
                                 <div className="md:border-l md:border-zinc-100 md:pl-4">
                                   <div className="flex items-center gap-1.5 mb-2">
