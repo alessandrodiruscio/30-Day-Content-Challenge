@@ -608,7 +608,7 @@ export default function App() {
               series={selectedSeries} 
               token={token}
               profile={profile}
-              onBack={() => setStep('results')}
+              onBack={() => setStep('my_strategies')}
               onSave={async (series) => {
                 if (!token) return;
                 try {
