@@ -1596,6 +1596,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
   const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>({});
+  const [expandedChecklist, setExpandedChecklist] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   
   const completionTasks = [
@@ -1895,26 +1896,49 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
                 {/* Day completion checklist */}
                 {!completedDays.includes(activeDay) && (
-                  <div className="bg-gradient-to-r from-brand-primary/5 to-blue-50 border border-brand-primary/10 rounded-2xl p-6">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Mark this day complete</h4>
-                    <div className="space-y-3">
-                      {completionTasks.map(task => (
-                        <label key={task.id} className="flex items-center gap-3 cursor-pointer group p-3 rounded-lg hover:bg-white/50 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={dayChecklist[activeDay]?.[task.id] || false}
-                            onChange={() => toggleTaskCheckbox(activeDay, task.id)}
-                            className="w-5 h-5 rounded border-2 border-zinc-300 checked:bg-emerald-500 checked:border-emerald-500 cursor-pointer transition-all"
-                          />
-                          <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900 transition-colors">{task.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-brand-primary/10">
-                      <p className="text-xs text-zinc-500">
-                        <span className="font-semibold text-zinc-700">{getDayChecklistStatus(activeDay).checkedCount}/3</span> complete
-                      </p>
-                    </div>
+                  <div>
+                    {!expandedChecklist ? (
+                      <button
+                        onClick={() => setExpandedChecklist(true)}
+                        className="w-full flex items-center justify-between px-6 py-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 size={18} className="text-brand-primary" />
+                          <span className="text-sm font-semibold text-zinc-700">Mark this day complete</span>
+                        </div>
+                        <span className="text-xs text-zinc-500 font-medium">{getDayChecklistStatus(activeDay).checkedCount}/3</span>
+                      </button>
+                    ) : (
+                      <div className="bg-gradient-to-r from-brand-primary/5 to-blue-50 border border-brand-primary/10 rounded-2xl p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Mark this day complete</h4>
+                          <button
+                            onClick={() => setExpandedChecklist(false)}
+                            className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          {completionTasks.map(task => (
+                            <label key={task.id} className="flex items-center gap-3 cursor-pointer group p-3 rounded-lg hover:bg-white/50 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={dayChecklist[activeDay]?.[task.id] || false}
+                                onChange={() => toggleTaskCheckbox(activeDay, task.id)}
+                                className="w-5 h-5 rounded border-2 border-zinc-300 checked:bg-emerald-500 checked:border-emerald-500 cursor-pointer transition-all"
+                              />
+                              <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900 transition-colors">{task.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-brand-primary/10">
+                          <p className="text-xs text-zinc-500">
+                            <span className="font-semibold text-zinc-700">{getDayChecklistStatus(activeDay).checkedCount}/3</span> complete
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
