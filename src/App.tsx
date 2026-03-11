@@ -51,66 +51,135 @@ function cn(...inputs: ClassValue[]) {
 
 function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete: () => void }) {
   const [step, setStep] = useState(0);
-  
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+
   const wizardSteps = [
     {
       title: "Navigate the Calendar",
-      description: "Click on any day in the calendar (1-30) to move between days and view different content ideas for each day of your challenge."
+      description: "Click on any day in the calendar (1-30) to move between days and view different content ideas for each day of your challenge.",
+      selector: ".wizard-calendar"
     },
     {
       title: "Choose Your Hook",
-      description: "Each day has multiple hook options. Click the dot buttons to preview different hooks and select the one that resonates most with your audience."
+      description: "Each day has multiple hook options. Click the dot buttons to preview different hooks and select the one that resonates most with your audience.",
+      selector: ".wizard-hooks"
     },
     {
       title: "Switch Between Reel & Carousel",
-      description: "Use the toggle to switch between Reel (vertical video) and Carousel (multiple image slides) formats. Both have custom layouts optimized for each platform."
+      description: "Use the toggle to switch between Reel (vertical video) and Carousel (multiple image slides) formats. Both have custom layouts optimized for each platform.",
+      selector: ".wizard-viewmode"
     },
     {
       title: "View the Storyboard",
-      description: "Click 'Show Storyboard' to see a visual frame-by-frame breakdown of your Reel. This helps you plan your video shoot or understand the content flow."
+      description: "Click 'Show Storyboard' to see a visual frame-by-frame breakdown of your Reel. This helps you plan your video shoot or understand the content flow.",
+      selector: ".wizard-storyboard"
     },
     {
       title: "Call to Action",
-      description: "Every day includes a customized call-to-action button text. This drives engagement by telling viewers exactly what you want them to do next."
+      description: "Every day includes a customized call-to-action button text. This drives engagement by telling viewers exactly what you want them to do next.",
+      selector: ".wizard-cta"
     },
     {
       title: "Suggested Caption",
-      description: "Get AI-generated captions for each day optimized for Instagram. Customize them to match your brand voice and messaging."
+      description: "Get AI-generated captions for each day optimized for Instagram. Customize them to match your brand voice and messaging.",
+      selector: ".wizard-caption"
     },
     {
       title: "Inspiration Videos",
-      description: "Find B-roll inspiration videos to enhance your content. Click the link to access a collection of relevant clips you can download and use."
+      description: "Find B-roll inspiration videos to enhance your content. Click the link to access a collection of relevant clips you can download and use.",
+      selector: ".wizard-inspiration"
     },
     {
       title: "Mark as Complete",
-      description: "When you post content for a day, click 'Mark as Done' to track your progress. Complete the 3 tasks (share, post in community, engage) to unlock the next day."
+      description: "When you post content for a day, click 'Mark as Done' to track your progress. Complete the 3 tasks (share, post in community, engage) to unlock the next day.",
+      selector: ".wizard-complete"
     }
   ];
 
+  useEffect(() => {
+    const drawSpotlight = () => {
+      const canvas = document.getElementById('wizard-spotlight') as HTMLCanvasElement;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Dark overlay
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Find target element
+      const targetEl = document.querySelector(wizardSteps[step].selector) as HTMLElement;
+      if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const padding = 16;
+
+        // Calculate popup position
+        const popupWidth = 380;
+        const popupHeight = 240;
+        let top = rect.top - popupHeight - 20;
+        let left = rect.left + (rect.width - popupWidth) / 2;
+
+        // Keep popup in viewport
+        if (top < 20) top = rect.bottom + 20;
+        if (left < 20) left = 20;
+        if (left + popupWidth > window.innerWidth - 20) left = window.innerWidth - popupWidth - 20;
+
+        setPopupPos({ top, left });
+
+        // Draw spotlight circle
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const radius = Math.max(rect.width, rect.height) / 2 + padding;
+
+        ctx.clearRect(
+          Math.max(0, centerX - radius - 4),
+          Math.max(0, centerY - radius - 4),
+          Math.min(canvas.width, (radius + 4) * 2),
+          Math.min(canvas.height, (radius + 4) * 2)
+        );
+
+        // Draw glow ring around spotlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    };
+
+    drawSpotlight();
+    window.addEventListener('resize', drawSpotlight);
+    return () => window.removeEventListener('resize', drawSpotlight);
+  }, [step, wizardSteps]);
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={onComplete}
-    >
+    <div className="fixed inset-0 z-50">
+      <canvas
+        id="wizard-spotlight"
+        className="fixed inset-0"
+        onClick={onComplete}
+      />
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-2xl p-8 max-w-md shadow-2xl"
+        className="fixed bg-white rounded-2xl p-8 max-w-md shadow-2xl border border-zinc-200"
+        style={{ top: `${popupPos.top}px`, left: `${popupPos.left}px` }}
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-6">
           <div className="text-sm text-zinc-500 mb-2">{step + 1} of {wizardSteps.length}</div>
           <h2 className="text-2xl font-display font-bold text-zinc-900 mb-3">{wizardSteps[step].title}</h2>
-          <p className="text-zinc-600 leading-relaxed">{wizardSteps[step].description}</p>
+          <p className="text-zinc-600 leading-relaxed text-sm">{wizardSteps[step].description}</p>
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={onComplete}
-            className="flex-1 px-4 py-2 rounded-lg border border-zinc-200 text-zinc-700 font-semibold hover:bg-zinc-50 transition-all"
+            className="flex-1 px-4 py-2 rounded-lg border border-zinc-200 text-zinc-700 font-semibold hover:bg-zinc-50 transition-all text-sm"
           >
             Skip Wizard
           </button>
@@ -122,13 +191,13 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
                 onComplete();
               }
             }}
-            className="flex-1 px-4 py-2 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-secondary transition-all"
+            className="flex-1 px-4 py-2 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-secondary transition-all text-sm"
           >
             {step === wizardSteps.length - 1 ? "Get Started" : "Next"}
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -2014,7 +2083,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                 {completedDays.length}/30 {t('detail.done')}
               </span>
             </div>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-5 gap-3 wizard-calendar">
               {series.days.map((day: any) => {
                 const isCompleted = completedDays.includes(day.day);
                 const dateStr = getDayDate(day.day);
@@ -2079,7 +2148,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   ) : (
                     <button
                       onClick={() => setShowChecklistModal(true)}
-                      className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all whitespace-nowrap"
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all whitespace-nowrap wizard-complete"
                     >
                       <CheckCircle2 size={16} className="text-brand-primary" />
                       <span className="text-sm font-semibold text-zinc-700">Complete</span>
@@ -2210,7 +2279,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                         </div>
                       )}
                     </div>
-                    <div className="relative group">
+                    <div className="relative group wizard-hooks">
                       <div className="p-4 md:p-8 rounded-2xl md:rounded-3xl bg-zinc-50 border border-zinc-100 text-lg md:text-xl font-medium leading-relaxed italic text-zinc-800 shadow-inner">
                         <span className="text-brand-primary opacity-20 text-3xl md:text-4xl absolute top-3 left-3 md:top-4 md:left-4 font-serif">"</span>
                         <div className="px-2 md:px-4">
@@ -2253,7 +2322,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Reel/Carousel toggle */}
-                        <div className="flex rounded-lg overflow-hidden border border-zinc-200">
+                        <div className="flex rounded-lg overflow-hidden border border-zinc-200 wizard-viewmode">
                           <button
                             onClick={() => setViewMode('reel')}
                             className={cn(
@@ -2284,7 +2353,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           <button
                             onClick={() => setShowStoryboard(!showStoryboard)}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all wizard-storyboard",
                               showStoryboard
                                 ? "bg-brand-primary text-white"
                                 : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
@@ -2430,7 +2499,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     )}
                   </section>
 
-                  <section>
+                  <section className="wizard-cta">
                     <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">{t('detail.ctaLabel')}</h4>
                     <div className="flex items-center gap-3 p-4 rounded-xl bg-brand-primary/5 text-brand-primary font-semibold">
                       <ArrowRight size={18} />
@@ -2438,7 +2507,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     </div>
                   </section>
 
-                  <section className="pt-6 md:pt-8 border-t border-zinc-100">
+                  <section className="pt-6 md:pt-8 border-t border-zinc-100 wizard-caption">
                     <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">{t('detail.captionLabel')}</h4>
                     <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-brand-secondary text-slate-300 font-mono text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
                       {currentDay.caption}
@@ -2446,7 +2515,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   </section>
 
                   {currentDay.searchTerms && currentDay.searchTerms.length > 0 && (
-                    <section className="pt-6 md:pt-8 border-t border-zinc-100">
+                    <section className="pt-6 md:pt-8 border-t border-zinc-100 wizard-inspiration">
                       <div className="flex items-center gap-2 mb-4">
                         <Play size={18} className="text-brand-primary" />
                         <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.inspirationTitle')}</h4>
