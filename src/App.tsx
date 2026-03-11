@@ -49,6 +49,89 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete: () => void }) {
+  const [step, setStep] = useState(0);
+  
+  const wizardSteps = [
+    {
+      title: "Navigate the Calendar",
+      description: "Click on any day in the calendar (1-30) to move between days and view different content ideas for each day of your challenge."
+    },
+    {
+      title: "Choose Your Hook",
+      description: "Each day has multiple hook options. Click the dot buttons to preview different hooks and select the one that resonates most with your audience."
+    },
+    {
+      title: "Switch Between Reel & Carousel",
+      description: "Use the toggle to switch between Reel (vertical video) and Carousel (multiple image slides) formats. Both have custom layouts optimized for each platform."
+    },
+    {
+      title: "View the Storyboard",
+      description: "Click 'Show Storyboard' to see a visual frame-by-frame breakdown of your Reel. This helps you plan your video shoot or understand the content flow."
+    },
+    {
+      title: "Call to Action",
+      description: "Every day includes a customized call-to-action button text. This drives engagement by telling viewers exactly what you want them to do next."
+    },
+    {
+      title: "Suggested Caption",
+      description: "Get AI-generated captions for each day optimized for Instagram. Customize them to match your brand voice and messaging."
+    },
+    {
+      title: "Inspiration Videos",
+      description: "Find B-roll inspiration videos to enhance your content. Click the link to access a collection of relevant clips you can download and use."
+    },
+    {
+      title: "Mark as Complete",
+      description: "When you post content for a day, click 'Mark as Done' to track your progress. Complete the 3 tasks (share, post in community, engage) to unlock the next day."
+    }
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={onComplete}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-2xl p-8 max-w-md shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-6">
+          <div className="text-sm text-zinc-500 mb-2">{step + 1} of {wizardSteps.length}</div>
+          <h2 className="text-2xl font-display font-bold text-zinc-900 mb-3">{wizardSteps[step].title}</h2>
+          <p className="text-zinc-600 leading-relaxed">{wizardSteps[step].description}</p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onComplete}
+            className="flex-1 px-4 py-2 rounded-lg border border-zinc-200 text-zinc-700 font-semibold hover:bg-zinc-50 transition-all"
+          >
+            Skip Wizard
+          </button>
+          <button
+            onClick={() => {
+              if (step < wizardSteps.length - 1) {
+                setStep(step + 1);
+              } else {
+                onComplete();
+              }
+            }}
+            className="flex-1 px-4 py-2 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-secondary transition-all"
+          >
+            {step === wizardSteps.length - 1 ? "Get Started" : "Next"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function Confetti() {
   useEffect(() => {
     const canvas = document.createElement('canvas');
@@ -1662,6 +1745,15 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
+  const [showWizard, setShowWizard] = useState<boolean>(() => {
+    const wizardKey = `wizard_seen_${series.id}`;
+    return !localStorage.getItem(wizardKey);
+  });
+
+  const handleWizardComplete = () => {
+    localStorage.setItem(`wizard_seen_${series.id}`, 'true');
+    setShowWizard(false);
+  };
   
   // Reset checklist when switching between strategies
   useEffect(() => {
@@ -1866,8 +1958,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 print:p-0">
-      <div className="flex items-center justify-between mb-12 print:hidden">
+    <>
+      {showWizard && <StrategyWizard seriesId={series.id} onComplete={handleWizardComplete} />}
+      <div className="max-w-7xl mx-auto px-6 py-12 print:p-0">
+        <div className="flex items-center justify-between mb-12 print:hidden">
         <button
           onClick={onBack}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
@@ -2439,7 +2533,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
