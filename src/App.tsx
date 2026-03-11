@@ -49,6 +49,68 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function Confetti() {
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '9999';
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles: any[] = [];
+    const colors = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+    for (let i = 0; i < 50; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: -10,
+        vx: (Math.random() - 0.5) * 8,
+        vy: Math.random() * 5 + 4,
+        size: Math.random() * 8 + 4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        rotation: Math.random() * Math.PI * 2,
+        rotationVel: (Math.random() - 0.5) * 0.1
+      });
+    }
+
+    const animate = () => {
+      ctx!.clearRect(0, 0, canvas.width, canvas.height);
+      
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.y += p.vy;
+        p.x += p.vx;
+        p.vy += 0.2;
+        p.rotation += p.rotationVel;
+
+        ctx!.save();
+        ctx!.translate(p.x, p.y);
+        ctx!.rotate(p.rotation);
+        ctx!.fillStyle = p.color;
+        ctx!.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx!.restore();
+
+        if (p.y > canvas.height) particles.splice(i, 1);
+      }
+
+      if (particles.length > 0) requestAnimationFrame(animate);
+      else document.body.removeChild(canvas);
+    };
+
+    animate();
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const toggleLanguage = () => {
@@ -1597,6 +1659,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
   const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>({});
   const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
+  const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   
   const completionTasks = [
@@ -1625,11 +1688,14 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     const allChecked = completionTasks.every(task => updatedChecklist[day]?.[task.id]);
     
     if (allChecked) {
-      // Close modal, show animation, then advance
+      // Close modal and show confetti
+      setShowChecklistModal(false);
+      setShowConfetti(true);
+      // Play confetti for 2 seconds, then advance
       setTimeout(() => {
-        setShowChecklistModal(false);
+        setShowConfetti(false);
         toggleDayComplete(day);
-      }, 300);
+      }, 2000);
     }
   };
   
@@ -1897,8 +1963,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     </div>
                   </div>
                   
-                  {/* Day completion button on the right */}
-                  {!completedDays.includes(activeDay) && (
+                  {/* Day completion button/banner on the right */}
+                  {completedDays.includes(activeDay) ? (
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-100 border-2 border-emerald-200">
+                      <CheckCircle2 size={16} className="text-emerald-600" />
+                      <span className="text-sm font-semibold text-emerald-700">Day complete!</span>
+                    </div>
+                  ) : (
                     <button
                       onClick={() => setShowChecklistModal(true)}
                       className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all whitespace-nowrap"
@@ -1970,26 +2041,20 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           Join our Discord community to share and discuss your progress
                         </p>
                         <a
-                          href="https://www.escape9to5.life/discord-community"
+                          href="https://discord.com/channels/1304090086371102832/1480976694234845226"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs font-bold text-brand-primary hover:text-brand-secondary transition-colors"
                         >
-                          Join #social-content →
+                          Join the Community →
                         </a>
                       </div>
                     </motion.div>
                   </div>
                 )}
 
-                {completedDays.includes(activeDay) && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 flex items-center gap-3">
-                    <CheckCircle2 size={24} className="text-emerald-600 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-bold text-emerald-900">Day {activeDay} Complete!</h4>
-                      <p className="text-sm text-emerald-700">Great work! All tasks checked off.</p>
-                    </div>
-                  </div>
+                {showConfetti && (
+                  <Confetti />
                 )}
 
                 <div className="space-y-8 md:space-y-10">
