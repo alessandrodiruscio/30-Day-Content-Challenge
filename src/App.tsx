@@ -117,31 +117,41 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
         const rect = targetEl.getBoundingClientRect();
         const padding = 12;
 
-        // Scroll element into view if needed
-        if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+        // Scroll element into view if needed - more aggressive threshold
+        if (rect.top < 150 || rect.bottom > window.innerHeight - 150) {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         // Use actual element bounds instead of circular spotlight
-        const x = Math.max(0, rect.left - padding);
-        const y = Math.max(0, rect.top - padding);
+        const x = rect.left - padding;
+        const y = rect.top - padding;
         const width = rect.width + padding * 2;
         const height = rect.height + padding * 2;
+        const cornerRadius = 12;
 
         // Clear the spotlight area with rounded corners
         ctx.clearRect(x, y, width, height);
 
-        // Draw soft glow using shadow
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
-        ctx.shadowBlur = 20;
+        // Draw soft glow border with shadow blur (no solid stroke)
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+        ctx.shadowBlur = 25;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
 
-        // Draw soft border around spotlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        // Draw multiple layers of soft glow
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, cornerRadius);
+        ctx.stroke();
+
+        // Inner soft glow
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+        ctx.shadowBlur = 15;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(x, y, width, height, 12);
+        ctx.roundRect(x + 2, y + 2, width - 4, height - 4, cornerRadius - 1);
         ctx.stroke();
 
         ctx.shadowColor = 'transparent';
