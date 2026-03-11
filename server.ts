@@ -98,10 +98,23 @@ async function initDatabase() {
         data LONGTEXT NOT NULL,
         start_date VARCHAR(255),
         completed_days TEXT,
+        day_checklist TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Add day_checklist column if it doesn't exist
+    try {
+      await pool.execute(`ALTER TABLE strategies ADD COLUMN day_checklist TEXT`);
+      console.log("✅ Added day_checklist column to strategies table");
+    } catch (err: any) {
+      if (err.message.includes("Duplicate column")) {
+        console.log("✅ day_checklist column already exists");
+      } else {
+        console.error("Warning: Could not add day_checklist column:", err.message);
+      }
+    }
     
     // Upgrade existing tables from TEXT to LONGTEXT
     try {
