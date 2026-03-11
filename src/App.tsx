@@ -182,7 +182,6 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
       <canvas
         id="wizard-spotlight"
         className="fixed inset-0"
-        onClick={onComplete}
       />
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
