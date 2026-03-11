@@ -115,45 +115,66 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
       const targetEl = document.querySelector(wizardSteps[step].selector) as HTMLElement;
       if (targetEl) {
         const rect = targetEl.getBoundingClientRect();
-        const padding = 16;
+        const padding = 12;
 
-        // Calculate popup position
+        // Scroll element into view if needed
+        if (rect.top < 100 || rect.bottom > window.innerHeight - 100) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Use actual element bounds instead of circular spotlight
+        const x = Math.max(0, rect.left - padding);
+        const y = Math.max(0, rect.top - padding);
+        const width = rect.width + padding * 2;
+        const height = rect.height + padding * 2;
+
+        // Clear the spotlight area with rounded corners
+        ctx.clearRect(x, y, width, height);
+
+        // Draw soft glow using shadow
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Draw soft border around spotlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, 12);
+        ctx.stroke();
+
+        ctx.shadowColor = 'transparent';
+
+        // Calculate popup position avoiding the highlighted area
         const popupWidth = 380;
         const popupHeight = 240;
-        let top = rect.top - popupHeight - 20;
+        let top = rect.top - popupHeight - 30;
         let left = rect.left + (rect.width - popupWidth) / 2;
 
         // Keep popup in viewport
-        if (top < 20) top = rect.bottom + 20;
+        if (top < 20) top = rect.bottom + 30;
         if (left < 20) left = 20;
         if (left + popupWidth > window.innerWidth - 20) left = window.innerWidth - popupWidth - 20;
 
+        // Make sure popup doesn't cover the highlight
+        const popupBottom = top + popupHeight;
+        if (top < rect.bottom && popupBottom > rect.top) {
+          top = rect.bottom + 30;
+        }
+
         setPopupPos({ top, left });
-
-        // Draw spotlight circle
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const radius = Math.max(rect.width, rect.height) / 2 + padding;
-
-        ctx.clearRect(
-          Math.max(0, centerX - radius - 4),
-          Math.max(0, centerY - radius - 4),
-          Math.min(canvas.width, (radius + 4) * 2),
-          Math.min(canvas.height, (radius + 4) * 2)
-        );
-
-        // Draw glow ring around spotlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius + 2, 0, Math.PI * 2);
-        ctx.stroke();
       }
     };
 
-    drawSpotlight();
+    // Debounce redraw to avoid excessive calls
+    const timer = setTimeout(drawSpotlight, 0);
     window.addEventListener('resize', drawSpotlight);
-    return () => window.removeEventListener('resize', drawSpotlight);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', drawSpotlight);
+    };
   }, [step, wizardSteps]);
 
   return (
