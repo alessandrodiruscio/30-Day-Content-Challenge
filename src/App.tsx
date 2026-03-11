@@ -1663,6 +1663,11 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   
+  // Reset checklist when switching between strategies
+  useEffect(() => {
+    setDayChecklist(series.day_checklist || {});
+  }, [series.id]);
+  
   const completionTasks = [
     { id: 'social', label: 'Shared on social media' },
     { id: 'community', label: 'Posted in community' },
