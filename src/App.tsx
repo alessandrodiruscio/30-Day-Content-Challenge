@@ -2071,8 +2071,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   return (
     <>
       {showWizard && <StrategyWizard seriesId={series.id} onComplete={handleWizardComplete} />}
-      <div className="max-w-7xl mx-auto px-6 py-12 print:p-0">
-        <div className="flex items-center justify-between mb-12 print:hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12 print:p-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 mb-8 sm:mb-12 print:hidden">
         <button
           onClick={onBack}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
@@ -2098,11 +2098,11 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-12">
         {/* Left Column: Sidebar Navigation */}
-        <div className="lg:col-span-4 space-y-8">
-          <div className="p-8 rounded-[2rem] bg-brand-secondary text-white shadow-2xl shadow-brand-secondary/20">
-            <h2 className="text-3xl font-display font-bold mb-4">{series.title}</h2>
+        <div className="lg:col-span-4 space-y-4 md:space-y-8">
+          <div className="p-4 md:p-8 rounded-2xl md:rounded-[2rem] bg-brand-secondary text-white shadow-2xl shadow-brand-secondary/20">
+            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">{series.title}</h2>
             <p className="text-slate-400 leading-relaxed mb-6">{series.description}</p>
             <div className="flex items-center gap-4 text-brand-primary font-semibold">
               <div className="flex items-center gap-2">
@@ -2166,18 +2166,18 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               exit={{ opacity: 0, y: -20 }}
               className="bg-white rounded-3xl md:rounded-[2.5rem] border border-zinc-200 shadow-sm overflow-hidden"
             >
-              <div className="p-5 md:p-12">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8 md:mb-10">
-                  <div className="flex items-center gap-4">
+              <div className="p-4 sm:p-6 md:p-12">
+                <div className="flex flex-col gap-4 mb-6 md:mb-10">
+                  <div className="flex items-start gap-3 sm:gap-4">
                     <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center font-display font-bold text-2xl transition-colors",
+                      "w-12 h-12 sm:w-14 sm:h-14 rounded-lg sm:rounded-2xl flex flex-shrink-0 items-center justify-center font-display font-bold text-xl sm:text-2xl transition-colors",
                       completedDays.includes(activeDay) ? "bg-emerald-100 text-emerald-600" : "bg-brand-primary/10 text-brand-primary"
                     )}>
                       {activeDay}
                     </div>
-                    <div>
-                      <h3 className="text-2xl font-display font-bold">{t('detail.dayContent', { day: activeDay })}</h3>
-                      <p className="text-zinc-500">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl sm:text-2xl font-display font-bold truncate">{t('detail.dayContent', { day: activeDay })}</h3>
+                      <p className="text-xs sm:text-sm text-zinc-500 truncate">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
                       {displayScript && (
                         <p className="text-sm text-zinc-600 font-medium mt-2 line-clamp-2 max-w-md">
                           {displayScript.split('\n')[0].substring(0, 100)}
@@ -2186,20 +2186,20 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     </div>
                   </div>
                   
-                  {/* Day completion button/banner on the right */}
+                  {/* Day completion button/banner - full width on mobile */}
                   {completedDays.includes(activeDay) ? (
-                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-100 border-2 border-emerald-200">
-                      <CheckCircle2 size={16} className="text-emerald-600" />
-                      <span className="text-sm font-semibold text-emerald-700">Day complete!</span>
+                    <div className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-emerald-100 border-2 border-emerald-200 w-full sm:w-auto justify-center sm:justify-start">
+                      <CheckCircle2 size={14} className="text-emerald-600 flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold text-emerald-700">Day complete!</span>
                     </div>
                   ) : (
                     <button
                       onClick={() => setShowChecklistModal(true)}
-                      className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all whitespace-nowrap wizard-complete"
+                      className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all wizard-complete w-full sm:w-auto justify-center sm:justify-start"
                     >
-                      <CheckCircle2 size={16} className="text-brand-primary" />
-                      <span className="text-sm font-semibold text-zinc-700">Complete</span>
-                      <span className="text-xs font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
+                      <CheckCircle2 size={14} className="text-brand-primary flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold text-zinc-700">Complete</span>
+                      <span className="text-[10px] sm:text-xs font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
                     </button>
                   )}
                 </div>
@@ -2360,14 +2360,14 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   </section>
 
                   <section>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 mb-4">
                       <div className="flex items-center gap-2">
-                        <FileText size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">
+                        <FileText size={16} className="text-brand-primary flex-shrink-0" />
+                        <h4 className="text-xs sm:text-sm font-bold uppercase tracking-widest text-zinc-400">
                           {viewMode === 'carousel' ? 'Carousel Slides' : t('detail.scriptLabel')}
                         </h4>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 overflow-x-auto">
                         {/* Reel/Carousel toggle */}
                         <div className="flex rounded-lg overflow-hidden border border-zinc-200 wizard-viewmode">
                           <button
