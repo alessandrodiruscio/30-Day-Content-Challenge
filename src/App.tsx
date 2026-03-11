@@ -2163,8 +2163,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     <div>
                       <h3 className="text-2xl font-display font-bold">{t('detail.dayContent', { day: activeDay })}</h3>
                       <p className="text-zinc-500">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
-                      {displayHook && (
-                        <p className="text-sm text-zinc-600 font-medium mt-2 italic max-w-md">"{displayHook}"</p>
+                      {displayScript && (
+                        <p className="text-sm text-zinc-600 font-medium mt-2 line-clamp-2 max-w-md">
+                          {displayScript.split('\n')[0].substring(0, 100)}
+                        </p>
                       )}
                     </div>
                   </div>
