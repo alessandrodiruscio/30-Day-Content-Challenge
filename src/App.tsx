@@ -71,9 +71,9 @@ function Confetti() {
     for (let i = 0; i < 50; i++) {
       particles.push({
         x: Math.random() * canvas.width,
-        y: -10,
+        y: canvas.height,
         vx: (Math.random() - 0.5) * 8,
-        vy: Math.random() * 5 + 4,
+        vy: -(Math.random() * 8 + 6),
         size: Math.random() * 8 + 4,
         color: colors[Math.floor(Math.random() * colors.length)],
         rotation: Math.random() * Math.PI * 2,
@@ -88,7 +88,7 @@ function Confetti() {
         const p = particles[i];
         p.y += p.vy;
         p.x += p.vx;
-        p.vy += 0.2;
+        p.vy += 0.15;
         p.rotation += p.rotationVel;
 
         ctx!.save();
@@ -98,7 +98,7 @@ function Confetti() {
         ctx!.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
         ctx!.restore();
 
-        if (p.y > canvas.height) particles.splice(i, 1);
+        if (p.y > canvas.height + 50) particles.splice(i, 1);
       }
 
       if (particles.length > 0) requestAnimationFrame(animate);
@@ -2062,18 +2062,25 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <Zap size={18} className="text-brand-primary" />
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.hookLabel', { index: currentHookIndex + 1 })}</h4>
+                        <div>
+                          <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.hookLabel', { index: currentHookIndex + 1 })}</h4>
+                          {currentDay.hooks && currentDay.hooks.length > 1 && (
+                            <p className="text-xs text-zinc-400 mt-0.5">Click dots to choose a hook ↓</p>
+                          )}
+                        </div>
                       </div>
                       {currentDay.hooks && (
                         <div className="flex items-center gap-3">
-                          <div className="flex gap-1">
+                          <div className="flex gap-2">
                             {currentDay.hooks.map((_: any, idx: number) => (
-                              <div 
+                              <button
                                 key={idx}
+                                onClick={() => setHookIndices(prev => ({ ...prev, [activeDay]: idx }))}
                                 className={cn(
-                                  "w-1.5 h-1.5 rounded-full transition-all",
-                                  currentHookIndex === idx ? "bg-brand-primary w-4" : "bg-zinc-200"
+                                  "w-3 h-3 rounded-full transition-all hover:scale-125 cursor-pointer",
+                                  currentHookIndex === idx ? "bg-brand-primary w-4" : "bg-zinc-300 hover:bg-zinc-400"
                                 )}
+                                title={`Hook ${idx + 1}`}
                               />
                             ))}
                           </div>
@@ -2081,14 +2088,14 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                             <button 
                               onClick={() => setHookIndices(prev => ({ ...prev, [activeDay]: Math.max(0, currentHookIndex - 1) }))}
                               disabled={currentHookIndex === 0}
-                              className="p-1.5 rounded-full bg-zinc-100 text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              className="p-1.5 rounded-full bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                               <ChevronLeft size={14} />
                             </button>
                             <button 
                               onClick={() => setHookIndices(prev => ({ ...prev, [activeDay]: Math.min((currentDay.hooks?.length || 1) - 1, currentHookIndex + 1) }))}
                               disabled={currentHookIndex === (currentDay.hooks?.length || 1) - 1}
-                              className="p-1.5 rounded-full bg-zinc-100 text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              className="p-1.5 rounded-full bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                               <ArrowRight size={14} className="rotate-0" />
                             </button>
