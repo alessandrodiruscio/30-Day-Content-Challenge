@@ -118,11 +118,10 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
         const padding = 12;
         const fadeWidth = 15; // Width of feather gradient
 
-        // Scroll element into view if needed
-        if (rect.top < 150 || rect.bottom > window.innerHeight - 150) {
+        // Scroll element into view if needed - very aggressive threshold
+        const scrollNeeded = rect.top < 200 || rect.bottom > window.innerHeight - 200;
+        if (scrollNeeded) {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Recalculate position after scroll
-          rect = targetEl.getBoundingClientRect();
         }
 
         // Use actual element bounds
@@ -135,17 +134,20 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
         // Clear the spotlight area with rounded corners
         ctx.clearRect(x, y, width, height);
 
-        // Draw feathered border using multiple strokes with decreasing opacity
+        // Draw very soft feathered border using many thin strokes
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        // Draw multiple strokes from thickest/most opaque to thinnest/most transparent
-        for (let i = fadeWidth; i > 0; i--) {
-          const opacity = (1 - i / fadeWidth) * 0.5;
+        const softFadeWidth = 30; // Much wider feather for softer edges
+        // Draw many strokes with smooth opacity curve
+        for (let i = softFadeWidth; i > 0; i--) {
+          // Smooth exponential curve for very soft fade
+          const opacity = Math.pow(1 - i / softFadeWidth, 2) * 0.35;
           ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.roundRect(x - fadeWidth / 2 + i / 2, y - fadeWidth / 2 + i / 2, width + fadeWidth - i, height + fadeWidth - i, cornerRadius);
+          const offset = i * 0.8;
+          ctx.roundRect(x - offset, y - offset, width + offset * 2, height + offset * 2, cornerRadius + 4);
           ctx.stroke();
         }
 
