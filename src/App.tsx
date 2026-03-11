@@ -152,19 +152,33 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
         }
 
         // Calculate popup position avoiding the highlighted area
-        const popupWidth = 380;
+        // Mobile-responsive width
+        const isMobile = window.innerWidth < 768;
+        const popupWidth = isMobile ? Math.min(320, window.innerWidth - 40) : 380;
         const popupHeight = 240;
+        
         let top = rect.top - popupHeight - 30;
         let left = rect.left + (rect.width - popupWidth) / 2;
 
-        // Keep popup in viewport
-        if (top < 20) top = rect.bottom + 30;
-        if (left < 20) left = 20;
-        if (left + popupWidth > window.innerWidth - 20) left = window.innerWidth - popupWidth - 20;
+        // Keep popup in viewport with mobile-aware margins
+        const marginSides = isMobile ? 20 : 20;
+        const marginVertical = isMobile ? 80 : 20; // More margin on mobile for safe touch zone
+        
+        if (top < marginVertical) top = Math.min(rect.bottom + 30, window.innerHeight - popupHeight - marginVertical);
+        if (left < marginSides) left = marginSides;
+        if (left + popupWidth > window.innerWidth - marginSides) left = window.innerWidth - popupWidth - marginSides;
 
-        // Make sure popup doesn't cover the highlight
+        // Ensure popup is fully visible on screen
+        if (top + popupHeight > window.innerHeight - marginVertical) {
+          top = window.innerHeight - popupHeight - marginVertical;
+        }
+        if (top < marginVertical) {
+          top = marginVertical;
+        }
+
+        // Make sure popup doesn't cover the highlight if possible
         const popupBottom = top + popupHeight;
-        if (top < rect.bottom && popupBottom > rect.top) {
+        if (top < rect.bottom && popupBottom > rect.top && window.innerHeight > 600) {
           top = rect.bottom + 30;
         }
 
@@ -193,7 +207,7 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="fixed bg-white rounded-2xl p-8 max-w-md shadow-2xl border border-zinc-200"
+        className="fixed bg-white rounded-2xl p-6 md:p-8 shadow-2xl border border-zinc-200 w-[calc(100vw-40px)] md:max-w-md"
         style={{ top: `${popupPos.top}px`, left: `${popupPos.left}px` }}
         onClick={e => e.stopPropagation()}
       >
