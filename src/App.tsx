@@ -1596,7 +1596,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
   const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>({});
-  const [expandedChecklist, setExpandedChecklist] = useState<boolean>(false);
+  const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   
   const completionTasks = [
@@ -1894,51 +1894,81 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   </div>
                 </div>
 
-                {/* Day completion checklist */}
+                {/* Day completion button */}
                 {!completedDays.includes(activeDay) && (
-                  <div>
-                    {!expandedChecklist ? (
-                      <button
-                        onClick={() => setExpandedChecklist(true)}
-                        className="w-full flex items-center justify-between px-6 py-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <CheckCircle2 size={18} className="text-brand-primary" />
-                          <span className="text-sm font-semibold text-zinc-700">Mark this day complete</span>
-                        </div>
-                        <span className="text-xs text-zinc-500 font-medium">{getDayChecklistStatus(activeDay).checkedCount}/3</span>
-                      </button>
-                    ) : (
-                      <div className="bg-gradient-to-r from-brand-primary/5 to-blue-50 border border-brand-primary/10 rounded-2xl p-6">
+                  <button
+                    onClick={() => setShowChecklistModal(true)}
+                    className="w-full flex items-center justify-between px-6 py-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 size={18} className="text-brand-primary" />
+                      <span className="text-sm font-semibold text-zinc-700">Mark this day complete</span>
+                    </div>
+                    <span className="text-xs font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
+                  </button>
+                )}
+
+                {/* Checklist Modal */}
+                {showChecklistModal && !completedDays.includes(activeDay) && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
+                    >
+                      <div className="bg-gradient-to-r from-brand-primary/10 to-blue-50 border-b border-brand-primary/10 px-8 py-6">
                         <div className="flex items-center justify-between mb-4">
-                          <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Mark this day complete</h4>
+                          <h2 className="text-xl font-display font-bold text-zinc-900">Complete Day {activeDay}</h2>
                           <button
-                            onClick={() => setExpandedChecklist(false)}
+                            onClick={() => setShowChecklistModal(false)}
                             className="text-zinc-400 hover:text-zinc-600 transition-colors"
                           >
-                            <X size={18} />
+                            <X size={24} />
                           </button>
                         </div>
-                        <div className="space-y-3">
-                          {completionTasks.map(task => (
-                            <label key={task.id} className="flex items-center gap-3 cursor-pointer group p-3 rounded-lg hover:bg-white/50 transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={dayChecklist[activeDay]?.[task.id] || false}
-                                onChange={() => toggleTaskCheckbox(activeDay, task.id)}
-                                className="w-5 h-5 rounded border-2 border-zinc-300 checked:bg-emerald-500 checked:border-emerald-500 cursor-pointer transition-all"
-                              />
-                              <span className="text-sm font-medium text-zinc-700 group-hover:text-zinc-900 transition-colors">{task.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-brand-primary/10">
-                          <p className="text-xs text-zinc-500">
-                            <span className="font-semibold text-zinc-700">{getDayChecklistStatus(activeDay).checkedCount}/3</span> complete
-                          </p>
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1 h-2 bg-zinc-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-brand-primary to-emerald-500 transition-all duration-300"
+                              style={{ width: `${Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-lg font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
                         </div>
                       </div>
-                    )}
+
+                      <div className="p-8 space-y-6">
+                        {completionTasks.map(task => (
+                          <div key={task.id} className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-zinc-700">{task.label}</span>
+                            {/* Switch toggle */}
+                            <button
+                              onClick={() => toggleTaskCheckbox(activeDay, task.id)}
+                              className={cn(
+                                "relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0",
+                                dayChecklist[activeDay]?.[task.id]
+                                  ? "bg-emerald-500 shadow-lg shadow-emerald-500/30"
+                                  : "bg-zinc-300 hover:bg-zinc-400"
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-md",
+                                  dayChecklist[activeDay]?.[task.id] ? "right-1" : "left-1"
+                                )}
+                              />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="bg-zinc-50 px-8 py-4 border-t border-zinc-100">
+                        <p className="text-xs text-zinc-500 text-center">
+                          Complete all tasks to finish this day and move on
+                        </p>
+                      </div>
+                    </motion.div>
                   </div>
                 )}
 
