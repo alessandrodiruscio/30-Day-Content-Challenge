@@ -114,15 +114,18 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
       // Find target element
       const targetEl = document.querySelector(wizardSteps[step].selector) as HTMLElement;
       if (targetEl) {
-        const rect = targetEl.getBoundingClientRect();
+        let rect = targetEl.getBoundingClientRect();
         const padding = 12;
+        const fadeWidth = 15; // Width of feather gradient
 
-        // Scroll element into view if needed - more aggressive threshold
+        // Scroll element into view if needed
         if (rect.top < 150 || rect.bottom > window.innerHeight - 150) {
           targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Recalculate position after scroll
+          rect = targetEl.getBoundingClientRect();
         }
 
-        // Use actual element bounds instead of circular spotlight
+        // Use actual element bounds
         const x = rect.left - padding;
         const y = rect.top - padding;
         const width = rect.width + padding * 2;
@@ -132,29 +135,19 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
         // Clear the spotlight area with rounded corners
         ctx.clearRect(x, y, width, height);
 
-        // Draw soft glow border with shadow blur (no solid stroke)
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-        ctx.shadowBlur = 25;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-
-        // Draw multiple layers of soft glow
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(x, y, width, height, cornerRadius);
-        ctx.stroke();
-
-        // Inner soft glow
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
-        ctx.shadowBlur = 15;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(x + 2, y + 2, width - 4, height - 4, cornerRadius - 1);
-        ctx.stroke();
-
-        ctx.shadowColor = 'transparent';
+        // Draw feathered border using multiple strokes with decreasing opacity
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Draw multiple strokes from thickest/most opaque to thinnest/most transparent
+        for (let i = fadeWidth; i > 0; i--) {
+          const opacity = (1 - i / fadeWidth) * 0.5;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(x - fadeWidth / 2 + i / 2, y - fadeWidth / 2 + i / 2, width + fadeWidth - i, height + fadeWidth - i, cornerRadius);
+          ctx.stroke();
+        }
 
         // Calculate popup position avoiding the highlighted area
         const popupWidth = 380;
@@ -177,13 +170,15 @@ function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete
       }
     };
 
-    // Debounce redraw to avoid excessive calls
+    // Initial draw
     const timer = setTimeout(drawSpotlight, 0);
     window.addEventListener('resize', drawSpotlight);
+    window.addEventListener('scroll', drawSpotlight, true);
     
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', drawSpotlight);
+      window.removeEventListener('scroll', drawSpotlight, true);
     };
   }, [step, wizardSteps]);
 
