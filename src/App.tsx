@@ -1842,12 +1842,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const [showWizard, setShowWizard] = useState<boolean>(() => {
-    const wizardKey = `wizard_seen_${series.id}`;
-    return !localStorage.getItem(wizardKey);
+    // Only show wizard on the very first strategy created, not on any new strategies
+    const hasSeenWizard = localStorage.getItem('wizard_seen_once');
+    return !hasSeenWizard;
   });
 
   const handleWizardComplete = () => {
-    localStorage.setItem(`wizard_seen_${series.id}`, 'true');
+    localStorage.setItem('wizard_seen_once', 'true');
     setShowWizard(false);
   };
   
