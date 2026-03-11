@@ -671,7 +671,7 @@ export default function App() {
               series={selectedSeries} 
               token={token}
               profile={profile}
-              onBack={() => setStep('my_strategies')}
+              onBack={() => fetchMyStrategies()}
               onSave={async (series) => {
                 if (!token) return;
                 try {
@@ -1665,7 +1665,6 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   
   // Reset checklist when switching between strategies
   useEffect(() => {
-    console.log(`Switching to strategy ${series.id}, loading checklist:`, series.day_checklist);
     setDayChecklist(series.day_checklist || {});
   }, [series.id]);
   
@@ -1688,18 +1687,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     
     // Save progress to server
     if (token && series.id) {
-      const payload = { completed_days: completedDays, day_checklist: updatedChecklist };
-      console.log(`Saving checklist for strategy ${series.id}:`, payload);
       robustFetch(`/api/strategies/${series.id}/progress`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
-      }).then(res => {
-        if (res.ok) console.log(`✅ Checklist saved for strategy ${series.id}`);
-        else console.error(`❌ Failed to save checklist for strategy ${series.id}: ${res.status}`);
+        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist })
       }).catch(err => console.error("Failed to save checklist progress:", err));
     }
     
