@@ -605,7 +605,8 @@ export default function App() {
                   ...s.data,
                   id: s.id,
                   start_date: s.start_date,
-                  completed_days: s.completed_days
+                  completed_days: s.completed_days,
+                  day_checklist: s.day_checklist
                 });
                 setStep('detail');
               }}
