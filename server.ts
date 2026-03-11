@@ -585,6 +585,7 @@ async function startServer() {
             data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data,
             start_date: s.start_date,
             completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
+            day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
             created_at: s.created_at
           };
         } catch (parseErr) {
@@ -624,12 +625,12 @@ async function startServer() {
   });
 
   app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
-    const { completed_days } = req.body;
+    const { completed_days, day_checklist } = req.body;
     try {
       const db = getPool();
       await db.execute(
-        'UPDATE strategies SET completed_days = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(completed_days), req.params.id, req.user.id]
+        'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), req.params.id, req.user.id]
       );
       res.json({ success: true });
     } catch (error) {

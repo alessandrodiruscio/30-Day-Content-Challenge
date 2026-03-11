@@ -1657,7 +1657,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
-  const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>({});
+  const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>(series.day_checklist || {});
   const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
@@ -1669,15 +1669,6 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   ];
   
   const toggleTaskCheckbox = (day: number, taskId: string) => {
-    setDayChecklist(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [taskId]: !prev[day]?.[taskId]
-      }
-    }));
-    
-    // Check if all tasks are now completed
     const updatedChecklist = {
       ...dayChecklist,
       [day]: {
@@ -1685,6 +1676,22 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
         [taskId]: !dayChecklist[day]?.[taskId]
       }
     };
+    
+    setDayChecklist(updatedChecklist);
+    
+    // Save progress to server
+    if (token && series.id) {
+      robustFetch(`/api/strategies/${series.id}/progress`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist })
+      }).catch(err => console.error("Failed to save checklist progress:", err));
+    }
+    
+    // Check if all tasks are now completed
     const allChecked = completionTasks.every(task => updatedChecklist[day]?.[task.id]);
     
     if (allChecked) {
