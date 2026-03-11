@@ -1625,7 +1625,11 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     const allChecked = completionTasks.every(task => updatedChecklist[day]?.[task.id]);
     
     if (allChecked) {
-      toggleDayComplete(day);
+      // Close modal, show animation, then advance
+      setTimeout(() => {
+        setShowChecklistModal(false);
+        toggleDayComplete(day);
+      }, 300);
     }
   };
   
@@ -1892,21 +1896,19 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                       <p className="text-zinc-500">{getDayDate(activeDay) || t('detail.reelStrategy')}</p>
                     </div>
                   </div>
+                  
+                  {/* Day completion button on the right */}
+                  {!completedDays.includes(activeDay) && (
+                    <button
+                      onClick={() => setShowChecklistModal(true)}
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all whitespace-nowrap"
+                    >
+                      <CheckCircle2 size={16} className="text-brand-primary" />
+                      <span className="text-sm font-semibold text-zinc-700">Complete</span>
+                      <span className="text-xs font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
+                    </button>
+                  )}
                 </div>
-
-                {/* Day completion button */}
-                {!completedDays.includes(activeDay) && (
-                  <button
-                    onClick={() => setShowChecklistModal(true)}
-                    className="w-full flex items-center justify-between px-6 py-4 rounded-2xl border-2 border-dashed border-brand-primary/30 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 size={18} className="text-brand-primary" />
-                      <span className="text-sm font-semibold text-zinc-700">Mark this day complete</span>
-                    </div>
-                    <span className="text-xs font-bold text-brand-primary">{Math.round((getDayChecklistStatus(activeDay).checkedCount / 3) * 100)}%</span>
-                  </button>
-                )}
 
                 {/* Checklist Modal */}
                 {showChecklistModal && !completedDays.includes(activeDay) && (
@@ -1963,10 +1965,18 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                         ))}
                       </div>
 
-                      <div className="bg-zinc-50 px-8 py-4 border-t border-zinc-100">
-                        <p className="text-xs text-zinc-500 text-center">
-                          Complete all tasks to finish this day and move on
+                      <div className="bg-zinc-50 px-8 py-5 border-t border-zinc-100 flex flex-col items-center gap-3">
+                        <p className="text-xs text-zinc-600 text-center font-medium">
+                          Join our Discord community to share and discuss your progress
                         </p>
+                        <a
+                          href="https://www.escape9to5.life/discord-community"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-bold text-brand-primary hover:text-brand-secondary transition-colors"
+                        >
+                          Join #social-content →
+                        </a>
                       </div>
                     </motion.div>
                   </div>
