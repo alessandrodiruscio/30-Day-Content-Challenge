@@ -3140,7 +3140,7 @@ function TeleprompterOverlay({
       if (scrollRef.current) {
         const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
         setScrollPosition(prev => {
-          const next = prev + (speed / 5);
+          const next = prev + (speed / 2.5);
           if (next >= maxScroll) {
             onRunningChange(false);
             return prev;
@@ -3165,7 +3165,7 @@ function TeleprompterOverlay({
       if (previewRef.current) {
         const maxScroll = previewRef.current.scrollHeight - previewRef.current.clientHeight;
         setPreviewScroll(prev => {
-          const next = prev + (speed / 5);
+          const next = prev + (speed / 2.5);
           if (next >= maxScroll) return 0;
           return next;
         });
