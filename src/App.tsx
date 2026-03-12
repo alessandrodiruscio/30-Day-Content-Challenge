@@ -3129,8 +3129,11 @@ function TeleprompterOverlay({
   onRunningChange: (r: boolean) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const previewRef = React.useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = React.useState(0);
+  const [previewScroll, setPreviewScroll] = React.useState(0);
 
+  // Scroll for full teleprompter mode
   React.useEffect(() => {
     if (!running || !scrollRef.current) return;
     const interval = setInterval(() => {
@@ -3155,64 +3158,125 @@ function TeleprompterOverlay({
     }
   }, [scrollPosition]);
 
+  // Preview scroll during settings
+  React.useEffect(() => {
+    if (running || !previewRef.current) return;
+    const interval = setInterval(() => {
+      if (previewRef.current) {
+        const maxScroll = previewRef.current.scrollHeight - previewRef.current.clientHeight;
+        setPreviewScroll(prev => {
+          const next = prev + (speed / 10);
+          if (next >= maxScroll) return 0;
+          return next;
+        });
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [running, speed]);
+
+  React.useEffect(() => {
+    if (previewRef.current) {
+      previewRef.current.scrollTop = previewScroll;
+    }
+  }, [previewScroll]);
+
   if (!running) {
     return (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-4"
+        className="fixed inset-0 z-50 bg-black flex flex-col p-4"
       >
-        <div className="max-w-md w-full space-y-6">
-          <h2 className="text-2xl font-bold text-white text-center">Teleprompter Settings</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="text-white text-sm font-semibold block mb-2">Speed: {speed}</label>
-              <input
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.1"
-                value={speed}
-                onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
-                className="w-full accent-brand-primary"
-              />
+        <div className="text-center mb-4">
+          <h2 className="text-2xl font-bold text-white">Teleprompter Setup</h2>
+          <p className="text-zinc-400 text-sm mt-1">Adjust settings while watching the preview</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 overflow-hidden">
+          {/* Preview area (takes up 2/3 on desktop) */}
+          <div className="lg:col-span-2 bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700 flex flex-col">
+            <div className="px-4 py-3 border-b border-zinc-700 bg-zinc-800">
+              <p className="text-xs font-semibold text-zinc-400 uppercase">Preview</p>
             </div>
-            
-            <div>
-              <label className="text-white text-sm font-semibold block mb-2">Font Size</label>
-              <div className="flex gap-2">
+            <div
+              ref={previewRef}
+              className="flex-1 overflow-hidden flex flex-col items-center justify-start pt-10 pb-10"
+              style={{
+                fontSize: `${fontSize * 0.5}rem`
+              }}
+            >
+              <div className="text-white leading-loose whitespace-pre-wrap text-center px-8 max-w-2xl font-sans">
+                {script}
+                <div className="h-40" />
+              </div>
+            </div>
+            <div className="px-4 py-2 border-t border-zinc-700 bg-zinc-800 text-center text-xs text-zinc-400">
+              Scrolling at speed {speed.toFixed(1)}x
+            </div>
+          </div>
+
+          {/* Controls (takes up 1/3 on desktop) */}
+          <div className="flex flex-col gap-4">
+            <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-700">
+              <label className="text-white text-sm font-semibold block mb-3">Speed</label>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0.5"
+                  max="3"
+                  step="0.1"
+                  value={speed}
+                  onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
+                  className="w-full accent-brand-primary"
+                />
+                <div className="text-center">
+                  <span className="text-2xl font-bold text-brand-primary">{speed.toFixed(1)}x</span>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    {speed < 1 ? 'Slow' : speed < 1.5 ? 'Normal' : 'Fast'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-700">
+              <label className="text-white text-sm font-semibold block mb-3">Font Size</label>
+              <div className="flex gap-2 mb-3">
                 <button
                   onClick={() => onFontSizeChange(Math.max(1, fontSize - 1))}
                   className="flex-1 px-3 py-2 rounded-lg bg-brand-primary/20 hover:bg-brand-primary/30 text-white transition-all"
+                  title="Smaller"
                 >
                   <ZoomOut size={18} className="mx-auto" />
                 </button>
                 <button
                   onClick={() => onFontSizeChange(Math.min(5, fontSize + 1))}
                   className="flex-1 px-3 py-2 rounded-lg bg-brand-primary/20 hover:bg-brand-primary/30 text-white transition-all"
+                  title="Larger"
                 >
                   <ZoomIn size={18} className="mx-auto" />
                 </button>
               </div>
+              <div className="text-center text-xs text-zinc-400">
+                Size {fontSize}/5
+              </div>
             </div>
+
+            <button
+              onClick={() => onRunningChange(true)}
+              className="w-full py-3 rounded-lg bg-brand-primary text-white font-bold flex items-center justify-center gap-2 hover:bg-brand-primary/90 transition-all mt-auto"
+            >
+              <Play size={20} />
+              Go Live
+            </button>
+
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-lg border border-zinc-600 text-white font-semibold hover:bg-zinc-800 transition-all"
+            >
+              Close
+            </button>
           </div>
-
-          <button
-            onClick={() => onRunningChange(true)}
-            className="w-full py-3 rounded-lg bg-brand-primary text-white font-bold flex items-center justify-center gap-2 hover:bg-brand-primary/90 transition-all"
-          >
-            <Play size={20} />
-            Start Teleprompter
-          </button>
-
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-lg border border-white text-white font-semibold hover:bg-white/10 transition-all"
-          >
-            Close
-          </button>
         </div>
       </motion.div>
     );
