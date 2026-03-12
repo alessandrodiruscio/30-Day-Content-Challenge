@@ -707,6 +707,190 @@ async function startServer() {
     }
   });
 
+  // Instagram Video Analysis
+  app.post(["/api/instagram/analyze", "/api/instagram/analyze/"], async (req: any, res) => {
+    const { videoUrl, accessToken } = req.body;
+    if (!videoUrl || !accessToken) {
+      return res.status(400).json({ error: "videoUrl and accessToken are required" });
+    }
+
+    try {
+      // Extract shortcode from URL
+      const shortcodeMatch = videoUrl.match(/\/(reel|p)\/([A-Za-z0-9_-]+)/);
+      if (!shortcodeMatch) {
+        return res.status(400).json({ error: "Invalid Instagram URL. Make sure it's a Reel or post URL." });
+      }
+      const shortcode = shortcodeMatch[2];
+
+      // Get user's IG Business account ID via /me
+      const meRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id}&access_token=${accessToken}`);
+      const meData = await meRes.json();
+
+      if (meData.error) {
+        return res.status(400).json({ error: `Instagram API error: ${meData.error.message}` });
+      }
+
+      // Try to get IG user ID from business accounts or fall back to /me
+      let igUserId: string | null = null;
+      if (meData.data && meData.data.length > 0) {
+        const pageWithIg = meData.data.find((p: any) => p.instagram_business_account);
+        if (pageWithIg) igUserId = pageWithIg.instagram_business_account.id;
+      }
+      if (!igUserId) {
+        // Try Basic Display API fallback
+        const basicRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id&access_token=${accessToken}`);
+        const basicData = await basicRes.json();
+        if (basicData.error) return res.status(400).json({ error: `Could not find Instagram account: ${basicData.error.message}` });
+        igUserId = basicData.id;
+      }
+
+      // Get media list to find matching post by shortcode
+      let mediaId: string | null = null;
+      let pageUrl = `https://graph.facebook.com/v19.0/${igUserId}/media?fields=id,permalink,shortcode,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&limit=100&access_token=${accessToken}`;
+      
+      outer: while (pageUrl) {
+        const mediaRes = await fetch(pageUrl);
+        const mediaData = await mediaRes.json();
+        if (mediaData.error) break;
+        for (const item of (mediaData.data || [])) {
+          if (item.shortcode === shortcode || (item.permalink && item.permalink.includes(shortcode))) {
+            mediaId = item.id;
+            break outer;
+          }
+        }
+        pageUrl = mediaData.paging?.next || null;
+        if (!mediaId && !mediaData.paging?.next) break;
+      }
+
+      if (!mediaId) {
+        return res.status(404).json({ error: "Reel not found. Make sure this Reel belongs to your connected Instagram account." });
+      }
+
+      // Get full media details
+      const detailRes = await fetch(
+        `https://graph.facebook.com/v19.0/${mediaId}?fields=id,permalink,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&access_token=${accessToken}`
+      );
+      const mediaDetail = await detailRes.json();
+      if (mediaDetail.error) return res.status(400).json({ error: mediaDetail.error.message });
+
+      // Get insights
+      const metrics = ['impressions', 'reach', 'plays', 'saved', 'shares', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'video_views'].join(',');
+      const insightsRes = await fetch(
+        `https://graph.facebook.com/v19.0/${mediaId}/insights?metric=${metrics}&access_token=${accessToken}`
+      );
+      const insightsData = await insightsRes.json();
+
+      // Parse insights into a flat object
+      const insightsMap: Record<string, number> = {};
+      if (insightsData.data) {
+        for (const metric of insightsData.data) {
+          insightsMap[metric.name] = metric.values?.[0]?.value ?? metric.value ?? 0;
+        }
+      }
+
+      const plays = insightsMap['plays'] || 0;
+      const impressions = insightsMap['impressions'] || 0;
+      const reach = insightsMap['reach'] || 0;
+      const saved = insightsMap['saved'] || 0;
+      const shares = insightsMap['shares'] || 0;
+      const avgWatchMs = insightsMap['ig_reels_avg_watch_time'] || 0;
+      const totalWatchMs = insightsMap['ig_reels_video_view_total_time'] || 0;
+      const videoViews = insightsMap['video_views'] || 0;
+
+      const likes = mediaDetail.like_count || 0;
+      const comments = mediaDetail.comments_count || 0;
+
+      // Derived metrics
+      const hookRate = plays > 0 ? (videoViews / plays) * 100 : 0;
+      const engagementRate = reach > 0 ? ((likes + comments + saved + shares) / reach) * 100 : 0;
+      const saveRate = reach > 0 ? (saved / reach) * 100 : 0;
+      const shareRate = reach > 0 ? (shares / reach) * 100 : 0;
+
+      // Use Gemini to generate AI insights
+      const ai = getAI();
+      const metricsContext = `
+        Reel Performance Metrics:
+        - Plays: ${plays.toLocaleString()}
+        - Impressions: ${impressions.toLocaleString()}
+        - Reach: ${reach.toLocaleString()}
+        - Likes: ${likes.toLocaleString()}
+        - Comments: ${comments.toLocaleString()}
+        - Saves: ${saved.toLocaleString()}
+        - Shares: ${shares.toLocaleString()}
+        - Hook Rate (3s view rate): ${hookRate.toFixed(1)}%
+        - Engagement Rate: ${engagementRate.toFixed(1)}%
+        - Save Rate: ${saveRate.toFixed(2)}%
+        - Share Rate: ${shareRate.toFixed(2)}%
+        - Average Watch Time: ${(avgWatchMs / 1000).toFixed(1)} seconds
+        Caption: "${(mediaDetail.caption || '').substring(0, 300)}"
+      `;
+
+      const aiResponse = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: `You are an expert Instagram Reels strategist. Analyze these performance metrics for an Instagram Reel and provide specific, actionable insights.\n\n${metricsContext}\n\nProvide analysis in JSON format.` }] }],
+        config: {
+          systemInstruction: "You are an expert social media analyst. Respond only with valid JSON.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object" as const,
+            properties: {
+              summary: { type: "string" as const, description: "2-3 sentence overall analysis of performance" },
+              went_well: { type: "array" as const, items: { type: "string" as const }, description: "3-4 specific things that performed well" },
+              improve: { type: "array" as const, items: { type: "string" as const }, description: "3-4 specific things to improve" },
+              next_steps: { type: "array" as const, items: { type: "string" as const }, description: "3 actionable next steps for the creator's next Reel" }
+            },
+            required: ["summary", "went_well", "improve", "next_steps"]
+          }
+        }
+      });
+
+      let aiResult = { summary: "", went_well: [], improve: [], next_steps: [] };
+      try {
+        const rawText = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        aiResult = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Failed to parse AI response:", e);
+      }
+
+      return res.json({
+        media: {
+          id: mediaId,
+          caption: mediaDetail.caption || '',
+          timestamp: mediaDetail.timestamp || '',
+          thumbnail_url: mediaDetail.thumbnail_url || null,
+          media_url: mediaDetail.media_url || null,
+          permalink: mediaDetail.permalink || videoUrl,
+          media_type: mediaDetail.media_type || 'REEL',
+          like_count: likes,
+          comments_count: comments
+        },
+        insights: {
+          impressions,
+          reach,
+          plays,
+          saved,
+          shares,
+          avg_watch_time_ms: avgWatchMs,
+          total_watch_time_ms: totalWatchMs,
+          video_views: videoViews
+        },
+        derived: {
+          hook_rate: parseFloat(hookRate.toFixed(1)),
+          engagement_rate: parseFloat(engagementRate.toFixed(2)),
+          save_rate: parseFloat(saveRate.toFixed(2)),
+          share_rate: parseFloat(shareRate.toFixed(2)),
+          avg_watch_time_sec: parseFloat((avgWatchMs / 1000).toFixed(1)),
+          completion_estimate: null
+        },
+        ai: aiResult
+      });
+
+    } catch (err: any) {
+      console.error("Instagram analysis error:", err);
+      res.status(500).json({ error: err.message || "Analysis failed" });
+    }
+  });
+
   // Gemini Routes
   app.post(["/api/gemini/generate-options", "/api/gemini/generate-options/"], authenticateToken, async (req: any, res) => {
     const { profile, language = 'en' } = req.body;

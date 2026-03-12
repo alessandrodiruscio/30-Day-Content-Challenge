@@ -37,9 +37,11 @@ import {
   Trash2,
   ExternalLink,
   LayoutGrid,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
+import VideoAnalytics from './VideoAnalytics';
 import { robustFetch, safeJson } from './utils/api';
 import { jsPDF } from 'jspdf';
 import { clsx, type ClassValue } from 'clsx';
@@ -670,6 +672,17 @@ export default function App() {
                         <span className="font-medium">{t('nav.recommendedTools')}</span>
                       </button>
 
+                      <button
+                        onClick={() => {
+                          setStep('video_analytics');
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-6 py-3 text-zinc-600 hover:bg-zinc-50 hover:text-brand-primary transition-colors text-left"
+                      >
+                        <BarChart3 size={18} />
+                        <span className="font-medium">Reel Analytics</span>
+                      </button>
+
                       {membership && (
                         <a 
                           href={membership.isMember ? membership.discordUrl : membership.trialUrl}
@@ -813,6 +826,14 @@ export default function App() {
             <RecommendedToolsView 
               key="recommended_tools"
               onBack={() => setStep('my_strategies')}
+            />
+          )}
+
+          {step === 'video_analytics' && (
+            <VideoAnalytics
+              key="video_analytics"
+              onBack={() => setStep('my_strategies')}
+              token={token}
             />
           )}
 
