@@ -3136,25 +3136,46 @@ function TeleprompterOverlay({
   const [scrollPosition, setScrollPosition] = React.useState(0);
   const [previewScroll, setPreviewScroll] = React.useState(0);
   const [showStoryboardLive, setShowStoryboardLive] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragStart, setDragStart] = React.useState(0);
 
   // Scroll for full teleprompter mode - smooth with 60fps
   React.useEffect(() => {
-    if (!running || !scrollRef.current) return;
+    if (!running || !scrollRef.current || isDragging) return;
     const interval = setInterval(() => {
       if (scrollRef.current) {
         const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
         setScrollPosition(prev => {
           const next = prev + (speed / 1.25);
+          // Don't auto-stop at the end - stay in live mode
           if (next >= maxScroll) {
-            onRunningChange(false);
-            return prev;
+            return maxScroll;
           }
           return next;
         });
       }
     }, 16);
     return () => clearInterval(interval);
-  }, [running, speed, onRunningChange]);
+  }, [running, speed, isDragging]);
+
+  // Mouse/touch drag to navigate - memoized to avoid render issues
+  const handleMouseDown = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const pos = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStart(pos);
+  }, []);
+
+  const handleMouseMove = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (isDragging && scrollRef.current) {
+      const pos = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      setScrollPosition(prev => Math.max(0, prev + (dragStart - pos)));
+      setDragStart(pos);
+    }
+  }, [isDragging, dragStart]);
+
+  const handleMouseUp = React.useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   React.useEffect(() => {
     if (scrollRef.current) {
@@ -3228,7 +3249,7 @@ function TeleprompterOverlay({
                 <input
                   type="range"
                   min="0.5"
-                  max="10"
+                  max="3"
                   step="0.1"
                   value={speed}
                   onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
@@ -3292,17 +3313,23 @@ function TeleprompterOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black flex flex-col"
-      onClick={() => onRunningChange(false)}
+      onMouseMove={handleMouseMove}
+      onTouchMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onTouchEnd={handleMouseUp}
+      onMouseLeave={handleMouseUp}
     >
-      <div className="flex-1 flex flex-col items-center justify-center overflow-hidden relative">
+      <div className="flex-1 flex flex-col items-center justify-center overflow-hidden relative cursor-grab active:cursor-grabbing">
         <div
           ref={scrollRef}
           className="w-full h-full overflow-hidden flex flex-col items-center justify-start pt-10 pb-10"
           style={{
             fontSize: `${fontSize * 0.5}rem`
           }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
         >
-          <div className="text-white leading-loose whitespace-pre-wrap text-center px-8 max-w-2xl font-sans">
+          <div className="text-white leading-loose whitespace-pre-wrap text-center px-8 max-w-2xl font-sans pointer-events-none">
             {showStoryboardLive && storyboard ? (
               <div className="space-y-6">
                 {script.split('\n\n').map((paragraph: string, idx: number) => {
@@ -3328,58 +3355,35 @@ function TeleprompterOverlay({
           </div>
         </div>
 
-        {/* Controls overlay */}
-        <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-2">
-          <div className="flex gap-2">
+        {/* Storyboard button - center top */}
+        {storyboard && (
+          <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-40 pointer-events-auto">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setScrollPosition(prev => Math.max(0, prev - 50));
+                setShowStoryboardLive(!showStoryboardLive);
               }}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm text-sm"
-              title="Scroll back"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all backdrop-blur-sm text-sm font-semibold pointer-events-auto ${
+                showStoryboardLive
+                  ? 'bg-blue-500/30 hover:bg-blue-500/40 text-blue-100 border border-blue-400'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+              title="Show camera actions"
             >
-              <ChevronLeft size={16} />
-              Back
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setScrollPosition(prev => prev + 50);
-              }}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm text-sm"
-              title="Scroll forward"
-            >
-              Forward
-              <ChevronLeft size={16} className="rotate-180" />
+              <Eye size={16} />
+              Storyboard
             </button>
           </div>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowStoryboardLive(!showStoryboardLive);
-            }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all backdrop-blur-sm text-sm font-semibold ${
-              showStoryboardLive
-                ? 'bg-blue-500/30 hover:bg-blue-500/40 text-blue-100 border border-blue-400'
-                : 'bg-white/10 hover:bg-white/20 text-white'
-            }`}
-            title="Show camera actions"
-          >
-            <Eye size={16} />
-            Storyboard
-          </button>
-        </div>
+        )}
 
         {/* Pause/Exit buttons */}
-        <div className="absolute top-6 right-6 flex gap-2">
+        <div className="absolute top-6 right-6 flex gap-2 z-40 pointer-events-auto">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onRunningChange(false);
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm pointer-events-auto"
           >
             <Pause size={18} />
             Pause
@@ -3389,7 +3393,7 @@ function TeleprompterOverlay({
               e.stopPropagation();
               onClose();
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm pointer-events-auto"
           >
             <X size={18} />
             Exit
@@ -3397,8 +3401,8 @@ function TeleprompterOverlay({
         </div>
       </div>
 
-      <div className="text-center text-white text-sm py-4">
-        Use Back/Forward to navigate • Toggle Storyboard to see camera actions
+      <div className="text-center text-white text-sm py-4 pointer-events-none">
+        Drag to navigate • Toggle Storyboard to see camera actions
       </div>
     </motion.div>
   );
