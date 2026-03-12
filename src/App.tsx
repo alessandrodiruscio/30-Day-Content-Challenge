@@ -2966,6 +2966,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     {showTeleprompter && (
                       <TeleprompterOverlay
                         script={displayScript}
+                        storyboard={currentDay.visuals}
                         onClose={() => {
                           setShowTeleprompter(false);
                           setTeleprompterRunning(false);
@@ -3111,6 +3112,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
 function TeleprompterOverlay({
   script,
+  storyboard,
   onClose,
   speed,
   fontSize,
@@ -3120,6 +3122,7 @@ function TeleprompterOverlay({
   onRunningChange
 }: {
   script: string;
+  storyboard?: string;
   onClose: () => void;
   speed: number;
   fontSize: number;
@@ -3132,15 +3135,16 @@ function TeleprompterOverlay({
   const previewRef = React.useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = React.useState(0);
   const [previewScroll, setPreviewScroll] = React.useState(0);
+  const [showStoryboardLive, setShowStoryboardLive] = React.useState(false);
 
-  // Scroll for full teleprompter mode
+  // Scroll for full teleprompter mode - smooth with 60fps
   React.useEffect(() => {
     if (!running || !scrollRef.current) return;
     const interval = setInterval(() => {
       if (scrollRef.current) {
         const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
         setScrollPosition(prev => {
-          const next = prev + (speed / 2.5);
+          const next = prev + (speed / 1.25);
           if (next >= maxScroll) {
             onRunningChange(false);
             return prev;
@@ -3148,7 +3152,7 @@ function TeleprompterOverlay({
           return next;
         });
       }
-    }, 50);
+    }, 16);
     return () => clearInterval(interval);
   }, [running, speed, onRunningChange]);
 
@@ -3158,19 +3162,19 @@ function TeleprompterOverlay({
     }
   }, [scrollPosition]);
 
-  // Preview scroll during settings
+  // Preview scroll during settings - smooth
   React.useEffect(() => {
     if (running || !previewRef.current) return;
     const interval = setInterval(() => {
       if (previewRef.current) {
         const maxScroll = previewRef.current.scrollHeight - previewRef.current.clientHeight;
         setPreviewScroll(prev => {
-          const next = prev + (speed / 2.5);
+          const next = prev + (speed / 1.25);
           if (next >= maxScroll) return 0;
           return next;
         });
       }
-    }, 50);
+    }, 16);
     return () => clearInterval(interval);
   }, [running, speed]);
 
@@ -3299,12 +3303,76 @@ function TeleprompterOverlay({
           }}
         >
           <div className="text-white leading-loose whitespace-pre-wrap text-center px-8 max-w-2xl font-sans">
-            {script}
+            {showStoryboardLive && storyboard ? (
+              <div className="space-y-6">
+                {script.split('\n\n').map((paragraph: string, idx: number) => {
+                  const storyboardLines = storyboard.split('\n');
+                  const storyboardForParagraph = storyboardLines[idx];
+                  return (
+                    <div key={idx}>
+                      <p>{paragraph}</p>
+                      {storyboardForParagraph && (
+                        <div className="mt-4 p-4 rounded-lg bg-blue-500/20 border border-blue-400/50 text-sm italic text-blue-200">
+                          <strong className="block mb-2">Camera Action:</strong>
+                          {storyboardForParagraph}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              script
+            )}
             <div className="h-96" />
           </div>
         </div>
 
         {/* Controls overlay */}
+        <div className="absolute top-6 left-6 right-6 flex items-center justify-between gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setScrollPosition(prev => Math.max(0, prev - 50));
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm text-sm"
+              title="Scroll back"
+            >
+              <ChevronLeft size={16} />
+              Back
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setScrollPosition(prev => prev + 50);
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm text-sm"
+              title="Scroll forward"
+            >
+              Forward
+              <ChevronLeft size={16} className="rotate-180" />
+            </button>
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStoryboardLive(!showStoryboardLive);
+            }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all backdrop-blur-sm text-sm font-semibold ${
+              showStoryboardLive
+                ? 'bg-blue-500/30 hover:bg-blue-500/40 text-blue-100 border border-blue-400'
+                : 'bg-white/10 hover:bg-white/20 text-white'
+            }`}
+            title="Show camera actions"
+          >
+            <Eye size={16} />
+            Storyboard
+          </button>
+        </div>
+
+        {/* Pause/Exit buttons */}
         <div className="absolute top-6 right-6 flex gap-2">
           <button
             onClick={(e) => {
@@ -3330,7 +3398,7 @@ function TeleprompterOverlay({
       </div>
 
       <div className="text-center text-white text-sm py-4">
-        Tap to pause • Swipe or drag to control scroll
+        Use Back/Forward to navigate • Toggle Storyboard to see camera actions
       </div>
     </motion.div>
   );
