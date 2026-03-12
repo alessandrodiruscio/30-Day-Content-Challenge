@@ -37,7 +37,10 @@ import {
   Trash2,
   ExternalLink,
   LayoutGrid,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BookOpen,
+  Grid3X3,
+  NotebookPen
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -311,7 +314,7 @@ export default function App() {
     i18n.changeLanguage(next);
     localStorage.setItem('language', next);
   };
-  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password' | 'video_analytics'>(
+  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password'>(
     (sessionStorage.getItem('currentStep') as any) || 'landing'
   );
   const [user, setUser] = useState<User | null>(null);
@@ -1851,9 +1854,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
   const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
+  const [detailViewMode, setDetailViewMode] = useState<'day' | 'calendar'>('day');
   const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>(series.day_checklist || {});
+  const [dayNotes, setDayNotes] = useState<Record<number, string>>(series.day_notes || {});
+  const [notesSaving, setNotesSaving] = useState<boolean>(false);
   const [showChecklistModal, setShowChecklistModal] = useState<boolean>(false);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
+  const notesTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const [showWizard, setShowWizard] = useState<boolean>(() => {
     // Only show wizard on the very first strategy created, not on any new strategies
@@ -1866,10 +1873,36 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     setShowWizard(false);
   };
   
-  // Reset checklist when switching between strategies
+  // Reset checklist and notes when switching between strategies
   useEffect(() => {
     setDayChecklist(series.day_checklist || {});
+    setDayNotes(series.day_notes || {});
   }, [series.id]);
+
+  const handleNoteChange = (day: number, value: string) => {
+    const updatedNotes = { ...dayNotes, [day]: value };
+    setDayNotes(updatedNotes);
+    if (notesTimerRef.current) clearTimeout(notesTimerRef.current);
+    notesTimerRef.current = setTimeout(async () => {
+      if (token && series.id) {
+        setNotesSaving(true);
+        try {
+          await robustFetch(`/api/strategies/${series.id}/progress`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ completed_days: completedDays, day_checklist: dayChecklist, day_notes: updatedNotes })
+          });
+        } catch (err) {
+          console.error("Failed to save note:", err);
+        } finally {
+          setNotesSaving(false);
+        }
+      }
+    }, 1500);
+  };
   
   const completionTasks = [
     { id: 'social', label: 'Shared on social media' },
@@ -1896,7 +1929,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist })
+        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist, day_notes: dayNotes })
       }).catch(err => console.error("Failed to save checklist progress:", err));
     }
     
@@ -1970,7 +2003,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ completed_days: newCompleted })
+          body: JSON.stringify({ completed_days: newCompleted, day_checklist: dayChecklist, day_notes: dayNotes })
         });
       } catch (error) {
         console.error("Failed to sync progress:", error);
@@ -2011,56 +2044,121 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     try {
       const doc = new jsPDF();
       const margin = 20;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const contentWidth = pageWidth - margin * 2;
       let y = margin;
 
-      // Title
-      doc.setFontSize(22);
-      doc.setFont("helvetica", "bold");
-      doc.text(series.title, margin, y);
-      y += 15;
-
-      // Description
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      const splitDesc = doc.splitTextToSize(series.description, 170);
-      doc.text(splitDesc, margin, y);
-      y += (splitDesc.length * 7) + 10;
-
-      // Days
-      series.days.forEach((day: any) => {
-        // Check if we need a new page
-        if (y > 240) {
+      const addPageIfNeeded = (needed: number = 20) => {
+        if (y + needed > doc.internal.pageSize.getHeight() - margin) {
           doc.addPage();
           y = margin;
         }
+      };
+
+      // Cover section
+      doc.setFillColor(99, 102, 241);
+      doc.rect(0, 0, pageWidth, 45, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text(series.title, margin, 20);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`30-Day Content Challenge  •  ${completedDays.length}/30 days completed`, margin, 30);
+      if (series.start_date) {
+        doc.text(`Started: ${new Date(series.start_date.replace(/-/g, '/')).toLocaleDateString()}`, margin, 38);
+      }
+      y = 55;
+
+      // Description
+      doc.setTextColor(60, 60, 80);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "italic");
+      const splitDesc = doc.splitTextToSize(series.description || '', contentWidth);
+      doc.text(splitDesc, margin, y);
+      y += (splitDesc.length * 6) + 12;
+
+      // Days
+      series.days.forEach((day: any) => {
+        addPageIfNeeded(50);
 
         const dayHook = day.hooks ? day.hooks[0] : day.hook;
         const dayScript = day.scripts ? day.scripts[0] : day.script;
+        const isCompleted = completedDays.includes(day.day);
+        const note = dayNotes[day.day];
 
-        doc.setFontSize(16);
+        // Day header bar
+        doc.setFillColor(isCompleted ? 209 : 238, isCompleted ? 250 : 238, isCompleted ? 229 : 255);
+        doc.rect(margin - 3, y - 6, contentWidth + 6, 12, 'F');
+        doc.setTextColor(isCompleted ? 5 : 67, isCompleted ? 150 : 56, isCompleted ? 105 : 202);
+        doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
-        doc.text(`Day ${day.day}: ${dayHook}`, margin, y);
+        doc.text(`Day ${day.day}${isCompleted ? '  ✓ Completed' : ''}`, margin, y);
         y += 10;
 
-        doc.setFontSize(10);
+        // Hook
+        doc.setTextColor(60, 60, 80);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text("Hook:", margin, y);
+        y += 4;
+        doc.setFont("helvetica", "normal");
+        const splitHook = doc.splitTextToSize(dayHook || "", contentWidth);
+        addPageIfNeeded(splitHook.length * 5 + 8);
+        doc.text(splitHook, margin, y);
+        y += (splitHook.length * 5) + 4;
+
+        // Script
         doc.setFont("helvetica", "bold");
         doc.text("Script:", margin, y);
-        y += 5;
+        y += 4;
         doc.setFont("helvetica", "normal");
-        const splitScript = doc.splitTextToSize(dayScript || "", 170);
+        const splitScript = doc.splitTextToSize((dayScript || "").substring(0, 500), contentWidth);
+        addPageIfNeeded(splitScript.length * 5 + 8);
         doc.text(splitScript, margin, y);
-        y += (splitScript.length * 5) + 5;
+        y += (splitScript.length * 5) + 4;
 
-        doc.setFont("helvetica", "bold");
-        doc.text("Visuals:", margin, y);
-        y += 5;
-        doc.setFont("helvetica", "normal");
-        const splitVisuals = doc.splitTextToSize(day.visuals, 170);
-        doc.text(splitVisuals, margin, y);
-        y += (splitVisuals.length * 5) + 15;
+        // Caption
+        if (day.caption) {
+          doc.setFont("helvetica", "bold");
+          doc.text("Caption:", margin, y);
+          y += 4;
+          doc.setFont("helvetica", "normal");
+          const splitCaption = doc.splitTextToSize(day.caption.substring(0, 300), contentWidth);
+          addPageIfNeeded(splitCaption.length * 5 + 8);
+          doc.text(splitCaption, margin, y);
+          y += (splitCaption.length * 5) + 4;
+        }
+
+        // CTA
+        if (day.cta) {
+          doc.setFont("helvetica", "bold");
+          doc.text("CTA:", margin, y);
+          doc.setFont("helvetica", "normal");
+          doc.text(` ${day.cta}`, margin + 10, y);
+          y += 6;
+        }
+
+        // Journal note
+        if (note && note.trim()) {
+          addPageIfNeeded(20);
+          doc.setFillColor(255, 251, 235);
+          doc.rect(margin - 3, y - 3, contentWidth + 6, 6 + Math.ceil(note.length / 90) * 5, 'F');
+          doc.setTextColor(120, 80, 0);
+          doc.setFont("helvetica", "bold");
+          doc.text("My Notes:", margin, y);
+          y += 4;
+          doc.setFont("helvetica", "normal");
+          const splitNote = doc.splitTextToSize(note, contentWidth);
+          doc.text(splitNote, margin, y);
+          y += (splitNote.length * 5) + 4;
+          doc.setTextColor(60, 60, 80);
+        }
+
+        y += 8;
       });
 
-      doc.save(`${series.title.replace(/\s+/g, '_')}_Strategy.pdf`);
+      doc.save(`${series.title.replace(/\s+/g, '_')}_30Day_Plan.pdf`);
     } catch (err) {
       console.error("PDF generation failed:", err);
       // Fallback to print if PDF generation fails
@@ -2098,6 +2196,102 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
         </div>
       </div>
 
+      {/* View mode toggle */}
+      <div className="flex gap-2 mb-8 print:hidden">
+        <button
+          onClick={() => setDetailViewMode('day')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all",
+            detailViewMode === 'day'
+              ? "bg-brand-primary text-white shadow-sm"
+              : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+          )}
+        >
+          <NotebookPen size={15} />
+          <span>Day View</span>
+        </button>
+        <button
+          onClick={() => setDetailViewMode('calendar')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all",
+            detailViewMode === 'calendar'
+              ? "bg-brand-primary text-white shadow-sm"
+              : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+          )}
+        >
+          <Grid3X3 size={15} />
+          <span>Calendar View</span>
+        </button>
+      </div>
+
+      {detailViewMode === 'calendar' ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="p-6 md:p-8 rounded-2xl md:rounded-[2rem] bg-brand-secondary text-white shadow-2xl shadow-brand-secondary/20">
+            <h2 className="text-2xl md:text-3xl font-display font-bold mb-2">{series.title}</h2>
+            <p className="text-slate-400 leading-relaxed mb-4">{series.description}</p>
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-brand-primary font-bold">{completedDays.length}/30 days completed</span>
+              {startDate && (
+                <span className="text-white/50 text-sm">
+                  Started {startDate.toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {series.days.map((day: any) => {
+              const isCompleted = completedDays.includes(day.day);
+              const dayHook = day.hooks ? day.hooks[0] : day.hook;
+              const note = dayNotes[day.day];
+              const dateStr = getDayDate(day.day);
+              return (
+                <button
+                  key={day.day}
+                  onClick={() => { setActiveDay(day.day); setDetailViewMode('day'); }}
+                  className={cn(
+                    "text-left p-5 rounded-2xl border-2 transition-all hover:shadow-md group",
+                    isCompleted
+                      ? "border-emerald-200 bg-emerald-50/50 hover:border-emerald-300"
+                      : "border-zinc-100 bg-white hover:border-brand-primary/30"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0",
+                      isCompleted ? "bg-emerald-100 text-emerald-700" : "bg-brand-primary/10 text-brand-primary"
+                    )}>
+                      {day.day}
+                    </div>
+                    {isCompleted ? (
+                      <div className="flex items-center gap-1 text-emerald-600">
+                        <CheckCircle2 size={13} />
+                        <span className="text-xs font-bold">Done</span>
+                      </div>
+                    ) : (
+                      dateStr && <span className="text-xs text-zinc-400">{dateStr}</span>
+                    )}
+                  </div>
+                  {dayHook && (
+                    <p className="text-xs font-medium text-zinc-700 leading-relaxed line-clamp-2 mb-2 group-hover:text-brand-primary transition-colors">
+                      {dayHook}
+                    </p>
+                  )}
+                  {note && note.trim() && (
+                    <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1 line-clamp-1 mt-1">
+                      <span className="font-bold">Note: </span>{note}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-12">
         {/* Left Column: Sidebar Navigation */}
         <div className="lg:col-span-4 space-y-4 md:space-y-8">
@@ -2587,6 +2781,26 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                       </div>
                     </section>
                   )}
+
+                  {/* Journal / Notes section */}
+                  <section className="pt-6 md:pt-8 border-t border-zinc-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <BookOpen size={18} className="text-brand-primary" />
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">My Notes</h4>
+                      </div>
+                      {notesSaving && (
+                        <span className="text-xs text-zinc-400 animate-pulse">Saving...</span>
+                      )}
+                    </div>
+                    <textarea
+                      value={dayNotes[activeDay] || ''}
+                      onChange={(e) => handleNoteChange(activeDay, e.target.value)}
+                      placeholder="What worked? What didn't? Any results or ideas for next time..."
+                      rows={4}
+                      className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/10 outline-none resize-none text-sm text-zinc-700 placeholder:text-zinc-300 transition-all bg-zinc-50 focus:bg-white"
+                    />
+                  </section>
                 </div>
               </div>
             </motion.div>
@@ -2649,6 +2863,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           )}
         </div>
       </div>
+      )}
       </div>
     </>
   );

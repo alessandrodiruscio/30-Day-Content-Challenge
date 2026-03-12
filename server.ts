@@ -115,6 +115,18 @@ async function initDatabase() {
         console.error("Warning: Could not add day_checklist column:", err.message);
       }
     }
+
+    // Add day_notes column if it doesn't exist
+    try {
+      await pool.execute(`ALTER TABLE strategies ADD COLUMN day_notes TEXT`);
+      console.log("✅ Added day_notes column to strategies table");
+    } catch (err: any) {
+      if (err.message.includes("Duplicate column")) {
+        console.log("✅ day_notes column already exists");
+      } else {
+        console.error("Warning: Could not add day_notes column:", err.message);
+      }
+    }
     
     // Upgrade existing tables from TEXT to LONGTEXT
     try {
@@ -656,6 +668,7 @@ async function startServer() {
             start_date: s.start_date,
             completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
             day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
+            day_notes: typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : (s.day_notes || {}),
             created_at: s.created_at
           };
         } catch (parseErr) {
@@ -695,12 +708,12 @@ async function startServer() {
   });
 
   app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
-    const { completed_days, day_checklist } = req.body;
+    const { completed_days, day_checklist, day_notes } = req.body;
     try {
       const db = getPool();
       await db.execute(
-        'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), req.params.id, req.user.id]
+        'UPDATE strategies SET completed_days = ?, day_checklist = ?, day_notes = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), JSON.stringify(day_notes || {}), req.params.id, req.user.id]
       );
       res.json({ success: true });
     } catch (error) {
