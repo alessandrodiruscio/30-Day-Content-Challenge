@@ -1067,9 +1067,50 @@ async function startServer() {
     }
   });
 
-  // Instagram - Check if OAuth is configured
-  app.get(["/api/instagram/config", "/api/instagram/config/"], (req, res) => {
-    res.json({ configured: !!(process.env.FB_APP_ID && process.env.FB_APP_SECRET) });
+  // Instagram - Connect token (manual paste from Graph API Explorer)
+  app.post(["/api/instagram/connect-token", "/api/instagram/connect-token/"], authenticateToken, async (req: any, res) => {
+    const { accessToken } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "accessToken is required" });
+    }
+    try {
+      // Validate token and get IG Business account info
+      const meRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`);
+      const meData = await meRes.json();
+      if (meData.error) {
+        return res.status(400).json({ error: `Invalid token: ${meData.error.message}` });
+      }
+      
+      // Find IG Business account
+      let igUser: any = null;
+      if (meData.data?.length > 0) {
+        for (const page of meData.data) {
+          if (page.instagram_business_account) {
+            igUser = page.instagram_business_account;
+            break;
+          }
+        }
+      }
+      
+      if (!igUser) {
+        return res.status(400).json({ error: "No Instagram Business or Creator account found. Make sure your Instagram account is set to Business or Creator and linked to a Facebook Page." });
+      }
+
+      // Save token + account info
+      const db = getPool();
+      await db.execute(
+        'UPDATE users SET instagram_access_token = ?, instagram_ig_user_id = ?, instagram_username = ?, instagram_profile_pic = ? WHERE id = ?',
+        [accessToken, igUser.id, igUser.username, igUser.profile_picture_url || null, req.user.id]
+      );
+
+      return res.json({
+        success: true,
+        account: { id: igUser.id, username: igUser.username, profile_pic: igUser.profile_picture_url || null }
+      });
+    } catch (err: any) {
+      console.error("Connect token error:", err);
+      res.status(500).json({ error: err.message || "Failed to validate token" });
+    }
   });
 
   // Instagram - Disconnect account

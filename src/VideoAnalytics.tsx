@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft, Instagram, Link2, Eye, Clock, TrendingUp,
   Heart, MessageCircle, Bookmark, Share2,
   Sparkles, AlertCircle, CheckCircle2, ThumbsUp, ThumbsDown,
   BarChart3, Loader2, ExternalLink, LogOut, User as UserIcon,
-  Settings, RefreshCcw
+  RefreshCcw, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -98,11 +98,12 @@ function RatingBar({ value, max = 100 }: { value: number; max?: number }) {
 
 export default function VideoAnalytics({ onBack, token: authToken }: Props) {
   const [statusLoading, setStatusLoading] = useState(true);
-  const [oauthConfigured, setOauthConfigured] = useState<boolean | null>(null);
   const [account, setAccount] = useState<IgAccount | null>(null);
   const [igToken, setIgToken] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
   const [videoUrl, setVideoUrl] = useState('');
@@ -110,16 +111,10 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
-  const popupRef = useRef<Window | null>(null);
-
-  // Check OAuth config + connection status on mount
+  // Check saved token on mount
   useEffect(() => {
     const init = async () => {
       try {
-        const cfgRes = await fetch('/api/instagram/config');
-        const cfg = await cfgRes.json();
-        setOauthConfigured(cfg.configured);
-
         if (authToken) {
           const statusRes = await fetch('/api/instagram/status', {
             headers: { 'Authorization': `Bearer ${authToken}` }
@@ -131,7 +126,7 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
           }
         }
       } catch (e) {
-        setOauthConfigured(false);
+        console.error('Status check failed', e);
       } finally {
         setStatusLoading(false);
       }
@@ -139,47 +134,29 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
     init();
   }, [authToken]);
 
-  // Listen for OAuth popup postMessage
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type !== 'INSTAGRAM_OAUTH') return;
-      setConnecting(false);
-      if (event.data.error) {
-        setConnectError(event.data.error);
-      } else if (event.data.success) {
-        setAccount(event.data.account);
-        setIgToken(event.data.token);
-        setConnectError(null);
-      }
-      popupRef.current?.close();
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
-
-  const handleConnect = () => {
+  const handleVerifyToken = async () => {
+    if (!tokenInput.trim()) return;
+    setVerifying(true);
     setConnectError(null);
-    setConnecting(true);
-    const url = authToken
-      ? `/api/instagram/oauth/start?_auth=${encodeURIComponent(authToken)}`
-      : '/api/instagram/oauth/start';
-    const popup = window.open(url, 'instagram_oauth', 'width=600,height=700,scrollbars=yes');
-    popupRef.current = popup;
-
-    // If popup is blocked
-    if (!popup) {
-      setConnecting(false);
-      setConnectError('Popup was blocked. Please allow popups for this site.');
-      return;
+    try {
+      const res = await fetch('/api/instagram/connect-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ accessToken: tokenInput.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification failed');
+      setAccount(data.account);
+      setIgToken(data.accessToken || tokenInput.trim());
+      setTokenInput('');
+    } catch (err: any) {
+      setConnectError(err.message || 'Invalid token');
+    } finally {
+      setVerifying(false);
     }
-
-    // Fallback: detect if popup closed without sending message
-    const interval = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(interval);
-        setConnecting(false);
-      }
-    }, 500);
   };
 
   const handleDisconnect = async () => {
@@ -260,7 +237,6 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
         </div>
       </div>
 
-      {/* Loading status */}
       {statusLoading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={28} className="animate-spin text-brand-primary" />
@@ -269,90 +245,106 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
 
       {!statusLoading && (
         <>
-          {/* Not configured warning */}
-          {oauthConfigured === false && !account && (
-            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 mb-6">
-              <div className="flex items-start gap-3">
-                <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-amber-900 mb-1">Instagram Connection Not Set Up</h3>
-                  <p className="text-sm text-amber-800 mb-3">
-                    To enable "Connect with Instagram", the app needs a Meta Developer App configured.
-                    Add <code className="bg-amber-100 px-1 rounded font-mono text-xs">FB_APP_ID</code> and{' '}
-                    <code className="bg-amber-100 px-1 rounded font-mono text-xs">FB_APP_SECRET</code> to your environment secrets.
-                  </p>
-                  <a
-                    href="https://developers.facebook.com/apps/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:underline"
-                  >
-                    Create a Meta App <ExternalLink size={11} />
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Connect Instagram Card */}
+          {/* No token — show instructions */}
           {!account && (
-            <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 mb-6 shadow-sm text-center">
-              {/* Instagram gradient icon */}
-              <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] flex items-center justify-center mx-auto mb-5 shadow-lg">
-                <Instagram size={32} className="text-white" />
-              </div>
-
-              <h3 className="text-xl font-display font-bold mb-2">Connect Your Instagram</h3>
-              <p className="text-sm text-zinc-500 mb-6 max-w-sm mx-auto">
-                Connect your Instagram Business or Creator account to analyze your Reels performance with real metrics.
-              </p>
-
+            <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-7 mb-6 shadow-sm">
               <button
-                onClick={handleConnect}
-                disabled={connecting}
-                className="inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#ee2a7b] to-[#6228d7] text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
+                onClick={() => setShowInstructions(!showInstructions)}
+                className="w-full flex items-center justify-between gap-2 mb-4 group"
               >
-                {connecting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Instagram size={18} />
-                    Connect with Instagram
-                  </>
-                )}
+                <div className="flex items-center gap-2 text-sm font-semibold text-brand-primary">
+                  <Sparkles size={15} />
+                  How to get your Instagram token
+                </div>
+                {showInstructions ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
               </button>
+
+              <AnimatePresence>
+                {showInstructions && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mb-5"
+                  >
+                    <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-100 mb-5">
+                      {[
+                        { step: 1, title: 'Open Graph API Explorer', desc: 'Go to developers.facebook.com/tools/explorer', link: 'https://developers.facebook.com/tools/explorer/' },
+                        { step: 2, title: 'Select your Meta App', desc: 'Choose your app from the dropdown at the top' },
+                        { step: 3, title: 'Generate Access Token', desc: 'Click "Generate Access Token" and grant these permissions: instagram_basic, instagram_manage_insights, pages_show_list' },
+                        { step: 4, title: 'Copy the token', desc: 'The token appears as a long string. Copy it and paste below.' },
+                      ].map(s => (
+                        <div key={s.step} className="flex gap-3">
+                          <div className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                            {s.step}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-zinc-800">{s.title}</div>
+                            <div className="text-xs text-zinc-500 mt-0.5">{s.desc}</div>
+                            {s.link && (
+                              <a href={s.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-primary font-semibold mt-1 hover:underline">
+                                Open <ExternalLink size={11} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                    Paste your Access Token
+                  </label>
+                  <input
+                    type="password"
+                    value={tokenInput}
+                    onChange={e => setTokenInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
+                    placeholder="EAAxxxxxx..."
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-zinc-50"
+                  />
+                </div>
+
+                <button
+                  onClick={handleVerifyToken}
+                  disabled={verifying || !tokenInput.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-primary text-white font-semibold text-sm hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {verifying ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} />
+                      Verify & Connect
+                    </>
+                  )}
+                </button>
+              </div>
 
               {connectError && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100 text-left max-w-sm mx-auto"
+                  className="mt-4 flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100"
                 >
                   <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-red-700">{connectError}</p>
                 </motion.div>
               )}
-
-              <div className="mt-6 pt-5 border-t border-zinc-100">
-                <p className="text-[11px] text-zinc-400">
-                  Requires an Instagram Business or Creator account linked to a Facebook Page.
-                  Your token is stored securely and only used to fetch your own Reel metrics.
-                </p>
-              </div>
             </div>
           )}
 
-          {/* Connected Account + Analyze Form */}
+          {/* Connected — show analyze form */}
           {account && (
             <AnimatePresence>
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-5"
-              >
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                 {/* Connected badge */}
                 <div className="bg-white border border-zinc-200 rounded-3xl p-4 sm:p-5 shadow-sm flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -424,19 +416,11 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
 
                 {/* Results */}
                 {result && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-5"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                     {/* Post info */}
                     <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-6 shadow-sm flex gap-4 items-start">
                       {(result.media.thumbnail_url || result.media.media_url) && (
-                        <img
-                          src={result.media.thumbnail_url || result.media.media_url}
-                          alt="Reel thumbnail"
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover flex-shrink-0"
-                        />
+                        <img src={result.media.thumbnail_url || result.media.media_url} alt="Reel thumbnail" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -444,19 +428,12 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
                           <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
                             {result.media.media_type === 'REEL' ? 'Instagram Reel' : result.media.media_type}
                           </span>
-                          <span className="text-xs text-zinc-400">
-                            · {new Date(result.media.timestamp).toLocaleDateString()}
-                          </span>
+                          <span className="text-xs text-zinc-400">· {new Date(result.media.timestamp).toLocaleDateString()}</span>
                         </div>
                         {result.media.caption && (
                           <p className="text-sm text-zinc-700 line-clamp-2">{result.media.caption}</p>
                         )}
-                        <a
-                          href={result.media.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-brand-primary font-semibold mt-1.5 hover:underline"
-                        >
+                        <a href={result.media.permalink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-primary font-semibold mt-1.5 hover:underline">
                           View on Instagram <ExternalLink size={10} />
                         </a>
                       </div>
