@@ -3323,9 +3323,10 @@ function TeleprompterOverlay({
       <div className="flex-1 flex flex-col items-center justify-center overflow-hidden relative cursor-grab active:cursor-grabbing">
         <div
           ref={scrollRef}
-          className="w-full h-full overflow-hidden flex flex-col items-center justify-start pt-10 pb-10"
+          className="w-full h-full overflow-hidden flex flex-col items-center justify-start pb-10"
           style={{
-            fontSize: `${fontSize * 0.5}rem`
+            fontSize: `${fontSize * 0.5}rem`,
+            paddingTop: 'calc(50vh - 60px)'
           }}
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
