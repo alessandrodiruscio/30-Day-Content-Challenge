@@ -267,12 +267,12 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden mb-5"
                   >
-                    <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-100 mb-5">
+                    <div className="bg-blue-50 rounded-2xl p-4 space-y-3 border border-blue-100 mb-5">
                       {[
-                        { step: 1, title: 'Open Graph API Explorer', desc: 'Go to developers.facebook.com/tools/explorer', link: 'https://developers.facebook.com/tools/explorer/' },
-                        { step: 2, title: 'Select your Meta App', desc: 'Choose your app from the dropdown at the top' },
-                        { step: 3, title: 'Generate Access Token', desc: 'Click "Generate Access Token" and grant these permissions: instagram_basic, instagram_manage_insights, pages_show_list' },
-                        { step: 4, title: 'Copy the token', desc: 'The token appears as a long string. Copy it and paste below.' },
+                        { step: 1, title: 'Open your Instagram Business Account', desc: 'Go to Settings > Account > Instagram Account (or ask your Meta/Instagram support for your access token)' },
+                        { step: 2, title: 'Get your access token', desc: 'Copy a long-lived access token from your Instagram Business account or Meta Business Suite. If you\'re not sure how, copy the entire URL from your browser\'s address bar.' },
+                        { step: 3, title: 'Paste it here', desc: 'Paste the token in the field below. It starts with "EAA" or similar.' },
+                        { step: 4, title: 'Done!', desc: 'Click "Verify & Connect" and we\'ll confirm it works.' },
                       ].map(s => (
                         <div key={s.step} className="flex gap-3">
                           <div className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
@@ -281,11 +281,6 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
                           <div>
                             <div className="text-sm font-semibold text-zinc-800">{s.title}</div>
                             <div className="text-xs text-zinc-500 mt-0.5">{s.desc}</div>
-                            {s.link && (
-                              <a href={s.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-primary font-semibold mt-1 hover:underline">
-                                Open <ExternalLink size={11} />
-                              </a>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -297,16 +292,19 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                    Paste your Access Token
+                    Paste your Instagram Access Token
                   </label>
                   <input
                     type="password"
                     value={tokenInput}
                     onChange={e => setTokenInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
-                    placeholder="EAAxxxxxx..."
+                    placeholder="Paste token here (starts with EAA or similar)..."
                     className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-zinc-50"
                   />
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Need help? Visit your Instagram Business Account settings or contact Instagram Support to find your access token.
+                  </p>
                 </div>
 
                 <button
