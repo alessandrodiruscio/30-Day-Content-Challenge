@@ -3140,7 +3140,7 @@ function TeleprompterOverlay({
       if (scrollRef.current) {
         const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
         setScrollPosition(prev => {
-          const next = prev + (speed / 5);
+          const next = prev + (speed / 20);
           if (next >= maxScroll) {
             onRunningChange(false);
             return prev;
@@ -3165,7 +3165,7 @@ function TeleprompterOverlay({
       if (previewRef.current) {
         const maxScroll = previewRef.current.scrollHeight - previewRef.current.clientHeight;
         setPreviewScroll(prev => {
-          const next = prev + (speed / 5);
+          const next = prev + (speed / 20);
           if (next >= maxScroll) return 0;
           return next;
         });
@@ -3224,7 +3224,7 @@ function TeleprompterOverlay({
                 <input
                   type="range"
                   min="0.5"
-                  max="6"
+                  max="10"
                   step="0.1"
                   value={speed}
                   onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
@@ -3233,7 +3233,7 @@ function TeleprompterOverlay({
                 <div className="text-center">
                   <span className="text-2xl font-bold text-brand-primary">{speed.toFixed(1)}x</span>
                   <p className="text-xs text-zinc-400 mt-1">
-                    {speed < 1 ? 'Slow' : speed < 2 ? 'Normal' : speed < 3.5 ? 'Fast' : 'Very Fast'}
+                    {speed < 2 ? 'Slow' : speed < 4 ? 'Normal' : speed < 6 ? 'Fast' : 'Very Fast'}
                   </p>
                 </div>
               </div>
