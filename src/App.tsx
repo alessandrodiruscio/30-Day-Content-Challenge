@@ -802,7 +802,8 @@ export default function App() {
                   id: s.id,
                   start_date: s.start_date,
                   completed_days: s.completed_days,
-                  day_checklist: s.day_checklist
+                  day_checklist: s.day_checklist,
+                  day_notes: s.day_notes
                 });
                 setStep('detail');
               }}
