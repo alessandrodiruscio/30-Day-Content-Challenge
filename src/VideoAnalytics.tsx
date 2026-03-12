@@ -285,99 +285,104 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
         <>
           {/* Connect card — shown when not yet connected */}
           {!account && (
-            <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 mb-6 shadow-sm text-center">
-              {/* Instagram gradient icon */}
-              <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] flex items-center justify-center mx-auto mb-5 shadow-lg">
-                <Instagram size={32} className="text-white" />
-              </div>
+            <div className="space-y-4 mb-6">
+              {/* Step-by-step guide */}
+              <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-7 shadow-sm">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] flex items-center justify-center flex-shrink-0">
+                    <Instagram size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-display font-bold">Connect your Instagram</h3>
+                    <p className="text-xs text-zinc-500">3 quick steps — takes about 1 minute</p>
+                  </div>
+                </div>
 
-              <h3 className="text-xl font-display font-bold mb-2">Connect Your Instagram</h3>
-              <p className="text-sm text-zinc-500 mb-6 max-w-sm mx-auto">
-                Connect your Instagram Business or Creator account to analyze your Reels performance with real metrics.
-              </p>
-
-              <button
-                onClick={handleConnect}
-                disabled={connecting || oauthConfigured === false}
-                className="inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#ee2a7b] to-[#6228d7] text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
-              >
-                {connecting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Instagram size={18} />
-                    Connect with Instagram
-                  </>
-                )}
-              </button>
-
-              {connectError && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100 text-left max-w-sm mx-auto"
-                >
-                  <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">{connectError}</p>
-                </motion.div>
-              )}
-
-              {/* Divider */}
-              <div className="mt-6 flex items-center gap-3">
-                <div className="flex-1 h-px bg-zinc-100" />
-                <span className="text-xs text-zinc-400 font-medium">or</span>
-                <div className="flex-1 h-px bg-zinc-100" />
-              </div>
-
-              {/* Manual token fallback */}
-              <button
-                onClick={() => setShowTokenFallback(!showTokenFallback)}
-                className="mt-4 flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors mx-auto"
-              >
-                <KeyRound size={13} />
-                Paste access token manually
-                {showTokenFallback ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </button>
-
-              <AnimatePresence>
-                {showTokenFallback && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-4 p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-3 text-left">
-                      <p className="text-xs text-zinc-500">
-                        Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="text-brand-primary font-semibold hover:underline">Graph API Explorer <ExternalLink size={10} className="inline" /></a>, generate a token with <code className="bg-zinc-100 px-1 rounded text-[10px]">instagram_business_basic</code> and <code className="bg-zinc-100 px-1 rounded text-[10px]">instagram_business_manage_insights</code> permissions, then paste it here.
-                      </p>
-                      <input
-                        type="password"
-                        value={tokenInput}
-                        onChange={e => setTokenInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
-                        placeholder="Paste your access token..."
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-white"
-                      />
-                      <button
-                        onClick={handleVerifyToken}
-                        disabled={verifying || !tokenInput.trim()}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-brand-primary text-white font-semibold text-sm hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {verifying ? <><Loader2 size={14} className="animate-spin" /> Verifying...</> : <><CheckCircle2 size={14} /> Verify & Connect</>}
-                      </button>
+                {/* Steps */}
+                <div className="space-y-4 mb-6">
+                  {/* Step 1 */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">1</div>
+                      <div className="w-px flex-1 bg-zinc-100 mt-2" />
                     </div>
+                    <div className="pb-4 flex-1">
+                      <p className="text-sm font-semibold text-zinc-800 mb-1">Open Graph API Explorer</p>
+                      <p className="text-xs text-zinc-500 mb-2">This is Meta's official tool for generating access tokens. Click the button below to open it.</p>
+                      <a
+                        href="https://developers.facebook.com/tools/explorer/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 text-white text-xs font-semibold hover:bg-zinc-700 transition-colors"
+                      >
+                        Open Graph API Explorer <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</div>
+                      <div className="w-px flex-1 bg-zinc-100 mt-2" />
+                    </div>
+                    <div className="pb-4 flex-1">
+                      <p className="text-sm font-semibold text-zinc-800 mb-1">Generate your token</p>
+                      <p className="text-xs text-zinc-500 mb-2">In the Explorer, select your Meta App from the top dropdown, then click <strong>"Generate Access Token"</strong>. When asked for permissions, make sure these two are checked:</p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="px-2 py-1 bg-violet-50 border border-violet-200 text-violet-700 rounded-lg text-[11px] font-mono">instagram_business_basic</span>
+                        <span className="px-2 py-1 bg-violet-50 border border-violet-200 text-violet-700 rounded-lg text-[11px] font-mono">instagram_business_manage_insights</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">3</div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-zinc-800 mb-1">Paste your token below</p>
+                      <p className="text-xs text-zinc-500 mb-3">Copy the long token that appears and paste it here. It starts with <code className="bg-zinc-100 px-1 rounded">EAA</code>.</p>
+                      <div className="space-y-2">
+                        <input
+                          type="password"
+                          value={tokenInput}
+                          onChange={e => setTokenInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
+                          placeholder="Paste token here..."
+                          className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-zinc-50"
+                        />
+                        <button
+                          onClick={handleVerifyToken}
+                          disabled={verifying || !tokenInput.trim()}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-[#ee2a7b] to-[#6228d7] text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-100"
+                        >
+                          {verifying
+                            ? <><Loader2 size={15} className="animate-spin" /> Verifying...</>
+                            : <><CheckCircle2 size={15} /> Connect Instagram</>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error */}
+                {connectError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100"
+                  >
+                    <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700">{connectError}</p>
                   </motion.div>
                 )}
-              </AnimatePresence>
 
-              <div className="mt-5 pt-5 border-t border-zinc-100">
-                <p className="text-[11px] text-zinc-400">
-                  Requires an Instagram Business or Creator account.
-                  Your token is stored securely and only used to fetch your own Reel metrics.
+                <p className="text-[11px] text-zinc-400 mt-4 pt-4 border-t border-zinc-100">
+                  Your token is saved securely and only used to fetch your own Reel metrics. You won't need to do this again.
                 </p>
               </div>
             </div>
