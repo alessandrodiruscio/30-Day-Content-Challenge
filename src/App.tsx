@@ -356,17 +356,6 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(!!token);
   const hasApiKey = true;
 
-  // Script editing and teleprompter state
-  const [editingScript, setEditingScript] = useState<{ day: number; hook: number } | null>(null);
-  const [editedScriptText, setEditedScriptText] = useState('');
-  const [showVersionHistory, setShowVersionHistory] = useState<{ day: number; hook: number } | null>(null);
-  const [scriptVersions, setScriptVersions] = useState<any[]>([]);
-  const [versionHistorySaving, setVersionHistorySaving] = useState(false);
-  const [showTeleprompter, setShowTeleprompter] = useState(false);
-  const [teleprompterSpeed, setTeleprompterSpeed] = useState(1);
-  const [teleprompterFontSize, setTeleprompterFontSize] = useState(3);
-  const [teleprompterRunning, setTeleprompterRunning] = useState(false);
-
   useEffect(() => {
     const restoreSession = async () => {
       if (!token) {
@@ -1844,6 +1833,17 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
 function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: any, token: string | null, profile: UserProfile, onBack: () => void, onSave: (s: any) => Promise<void> }) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
+  
+  // Script editing and teleprompter state
+  const [editingScript, setEditingScript] = useState<{ day: number; hook: number } | null>(null);
+  const [editedScriptText, setEditedScriptText] = useState('');
+  const [showVersionHistory, setShowVersionHistory] = useState<{ day: number; hook: number } | null>(null);
+  const [scriptVersions, setScriptVersions] = useState<any[]>([]);
+  const [versionHistorySaving, setVersionHistorySaving] = useState(false);
+  const [showTeleprompter, setShowTeleprompter] = useState(false);
+  const [teleprompterSpeed, setTeleprompterSpeed] = useState(1);
+  const [teleprompterFontSize, setTeleprompterFontSize] = useState(3);
+  const [teleprompterRunning, setTeleprompterRunning] = useState(false);
   
   // Check if series data is valid
   if (!series || !series.days || !Array.isArray(series.days) || series.days.length === 0) {
