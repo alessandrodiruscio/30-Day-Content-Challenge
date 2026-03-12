@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft, Instagram, Link2, Eye, Clock, TrendingUp,
   Heart, MessageCircle, Bookmark, Share2,
   Sparkles, AlertCircle, CheckCircle2, ThumbsUp, ThumbsDown,
   BarChart3, Loader2, ExternalLink, LogOut, User as UserIcon,
-  RefreshCcw, ChevronDown, ChevronUp
+  RefreshCcw
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -98,23 +98,27 @@ function RatingBar({ value, max = 100 }: { value: number; max?: number }) {
 
 export default function VideoAnalytics({ onBack, token: authToken }: Props) {
   const [statusLoading, setStatusLoading] = useState(true);
+  const [oauthConfigured, setOauthConfigured] = useState<boolean | null>(null);
   const [account, setAccount] = useState<IgAccount | null>(null);
   const [igToken, setIgToken] = useState<string | null>(null);
-  const [tokenInput, setTokenInput] = useState('');
-  const [verifying, setVerifying] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [showInstructions, setShowInstructions] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const popupRef = useRef<Window | null>(null);
 
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
-  // Check saved token on mount
+  // Check OAuth config + saved connection on mount
   useEffect(() => {
     const init = async () => {
       try {
+        const cfgRes = await fetch('/api/instagram/config');
+        const cfg = await cfgRes.json();
+        setOauthConfigured(cfg.configured);
+
         if (authToken) {
           const statusRes = await fetch('/api/instagram/status', {
             headers: { 'Authorization': `Bearer ${authToken}` }
@@ -126,7 +130,7 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
           }
         }
       } catch (e) {
-        console.error('Status check failed', e);
+        setOauthConfigured(false);
       } finally {
         setStatusLoading(false);
       }
@@ -134,37 +138,42 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
     init();
   }, [authToken]);
 
-  const handleVerifyToken = async () => {
-    if (!tokenInput.trim()) return;
-    setVerifying(true);
+  // Listen for OAuth popup result
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'instagram_oauth') return;
+      setConnecting(false);
+      if (event.data.error) {
+        setConnectError(event.data.error);
+      } else if (event.data.account) {
+        setAccount(event.data.account);
+        setIgToken(event.data.token);
+        setConnectError(null);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleConnect = () => {
+    setConnecting(true);
     setConnectError(null);
-    try {
-      const res = await fetch('/api/instagram/connect-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-        },
-        body: JSON.stringify({ accessToken: tokenInput.trim() })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Verification failed');
-      setAccount(data.account);
-      setIgToken(data.accessToken || tokenInput.trim());
-      setTokenInput('');
-    } catch (err: any) {
-      setConnectError(err.message || 'Invalid token');
-    } finally {
-      setVerifying(false);
-    }
+    const authParam = authToken ? `?_auth=${encodeURIComponent(authToken)}` : '';
+    const url = `/api/instagram/oauth/start${authParam}`;
+    const popup = window.open(url, 'instagram_oauth', 'width=600,height=700,left=200,top=100');
+    popupRef.current = popup;
+
+    // Poll for popup close in case postMessage doesn't fire
+    const timer = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(timer);
+        setConnecting(false);
+      }
+    }, 500);
   };
 
   const handleDisconnect = async () => {
-    if (!authToken) {
-      setAccount(null);
-      setIgToken(null);
-      return;
-    }
+    if (!authToken) { setAccount(null); setIgToken(null); return; }
     setDisconnecting(true);
     try {
       await fetch('/api/instagram/disconnect', {
@@ -245,97 +254,54 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
 
       {!statusLoading && (
         <>
-          {/* No token — show instructions */}
+          {/* Connect card — shown when not yet connected */}
           {!account && (
-            <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-7 mb-6 shadow-sm">
-              <button
-                onClick={() => setShowInstructions(!showInstructions)}
-                className="w-full flex items-center justify-between gap-2 mb-4 group"
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold text-brand-primary">
-                  <Sparkles size={15} />
-                  How to get your Instagram token
-                </div>
-                {showInstructions ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
-              </button>
-
-              <AnimatePresence>
-                {showInstructions && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden mb-5"
-                  >
-                    <div className="bg-blue-50 rounded-2xl p-4 space-y-3 border border-blue-100 mb-5">
-                      {[
-                        { step: 1, title: 'Open your Instagram Business Account', desc: 'Go to Settings > Account > Instagram Account (or ask your Meta/Instagram support for your access token)' },
-                        { step: 2, title: 'Get your access token', desc: 'Copy a long-lived access token from your Instagram Business account or Meta Business Suite. If you\'re not sure how, copy the entire URL from your browser\'s address bar.' },
-                        { step: 3, title: 'Paste it here', desc: 'Paste the token in the field below. It starts with "EAA" or similar.' },
-                        { step: 4, title: 'Done!', desc: 'Click "Verify & Connect" and we\'ll confirm it works.' },
-                      ].map(s => (
-                        <div key={s.step} className="flex gap-3">
-                          <div className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                            {s.step}
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold text-zinc-800">{s.title}</div>
-                            <div className="text-xs text-zinc-500 mt-0.5">{s.desc}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                    Paste your Instagram Access Token
-                  </label>
-                  <input
-                    type="password"
-                    value={tokenInput}
-                    onChange={e => setTokenInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
-                    placeholder="Paste token here (starts with EAA or similar)..."
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-zinc-50"
-                  />
-                  <p className="text-xs text-zinc-500 mt-2">
-                    Need help? Visit your Instagram Business Account settings or contact Instagram Support to find your access token.
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleVerifyToken}
-                  disabled={verifying || !tokenInput.trim()}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-primary text-white font-semibold text-sm hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {verifying ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={15} />
-                      Verify & Connect
-                    </>
-                  )}
-                </button>
+            <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 mb-6 shadow-sm text-center">
+              {/* Instagram gradient icon */}
+              <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] flex items-center justify-center mx-auto mb-5 shadow-lg">
+                <Instagram size={32} className="text-white" />
               </div>
+
+              <h3 className="text-xl font-display font-bold mb-2">Connect Your Instagram</h3>
+              <p className="text-sm text-zinc-500 mb-6 max-w-sm mx-auto">
+                Connect your Instagram Business or Creator account to analyze your Reels performance with real metrics.
+              </p>
+
+              <button
+                onClick={handleConnect}
+                disabled={connecting || oauthConfigured === false}
+                className="inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#ee2a7b] to-[#6228d7] text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
+              >
+                {connecting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Instagram size={18} />
+                    Connect with Instagram
+                  </>
+                )}
+              </button>
 
               {connectError && (
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100"
+                  className="mt-4 flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-100 text-left max-w-sm mx-auto"
                 >
                   <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-red-700">{connectError}</p>
                 </motion.div>
               )}
+
+              <div className="mt-6 pt-5 border-t border-zinc-100">
+                <p className="text-[11px] text-zinc-400">
+                  Requires an Instagram Business or Creator account.
+                  Your token is stored securely and only used to fetch your own Reel metrics.
+                </p>
+              </div>
             </div>
           )}
 

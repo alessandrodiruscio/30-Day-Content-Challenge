@@ -779,32 +779,21 @@ async function startServer() {
       }
       const shortcode = shortcodeMatch[2];
 
-      // Get user's IG Business account ID via /me
-      const meRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id}&access_token=${accessToken}`);
+      // Get user's IG account ID via Instagram Business Login token
+      const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
       const meData = await meRes.json();
-
       if (meData.error) {
         return res.status(400).json({ error: `Instagram API error: ${meData.error.message}` });
       }
-
-      // Try to get IG user ID from business accounts or fall back to /me
-      let igUserId: string | null = null;
-      if (meData.data && meData.data.length > 0) {
-        const pageWithIg = meData.data.find((p: any) => p.instagram_business_account);
-        if (pageWithIg) igUserId = pageWithIg.instagram_business_account.id;
-      }
+      const igUserId = meData.id;
       if (!igUserId) {
-        // Try Basic Display API fallback
-        const basicRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id&access_token=${accessToken}`);
-        const basicData = await basicRes.json();
-        if (basicData.error) return res.status(400).json({ error: `Could not find Instagram account: ${basicData.error.message}` });
-        igUserId = basicData.id;
+        return res.status(400).json({ error: "Could not find your Instagram account. Please reconnect." });
       }
 
       // Get media list to find matching post by shortcode
       let mediaId: string | null = null;
-      let pageUrl = `https://graph.facebook.com/v19.0/${igUserId}/media?fields=id,permalink,shortcode,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&limit=100&access_token=${accessToken}`;
-      
+      let pageUrl: string | null = `https://graph.instagram.com/v21.0/${igUserId}/media?fields=id,permalink,shortcode,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&limit=100&access_token=${accessToken}`;
+
       outer: while (pageUrl) {
         const mediaRes = await fetch(pageUrl);
         const mediaData = await mediaRes.json();
@@ -825,7 +814,7 @@ async function startServer() {
 
       // Get full media details
       const detailRes = await fetch(
-        `https://graph.facebook.com/v19.0/${mediaId}?fields=id,permalink,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&access_token=${accessToken}`
+        `https://graph.instagram.com/v21.0/${mediaId}?fields=id,permalink,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&access_token=${accessToken}`
       );
       const mediaDetail = await detailRes.json();
       if (mediaDetail.error) return res.status(400).json({ error: mediaDetail.error.message });
@@ -833,7 +822,7 @@ async function startServer() {
       // Get insights
       const metrics = ['impressions', 'reach', 'plays', 'saved', 'shares', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'video_views'].join(',');
       const insightsRes = await fetch(
-        `https://graph.facebook.com/v19.0/${mediaId}/insights?metric=${metrics}&access_token=${accessToken}`
+        `https://graph.instagram.com/v21.0/${mediaId}/insights?metric=${metrics}&access_token=${accessToken}`
       );
       const insightsData = await insightsRes.json();
 
@@ -948,28 +937,27 @@ async function startServer() {
     }
   });
 
-  // Instagram OAuth - Start
+  // Instagram OAuth - Start (Instagram Business Login — no Facebook Pages required)
   app.get(["/api/instagram/oauth/start", "/api/instagram/oauth/start/"], async (req: any, res) => {
     const FB_APP_ID = process.env.FB_APP_ID;
     if (!FB_APP_ID) {
-      return res.send(popupCloseHtml({ error: 'Instagram OAuth is not configured. Please add FB_APP_ID and FB_APP_SECRET to the app secrets.' }));
+      return res.send(popupCloseHtml({ error: 'Instagram connection is not configured yet. Please contact the app owner.' }));
     }
     const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
     const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
-    // Accept user JWT from query param (popup can't send headers)
     const userJwt = (req.query._auth as string) || null;
-    // Validate it before encoding into state
     let validUserJwt: string | null = null;
     if (userJwt) {
       try { jwt.verify(userJwt, JWT_SECRET); validUserJwt = userJwt; } catch (_) {}
     }
     const state = jwt.sign({ userJwt: validUserJwt, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET, { expiresIn: '10m' });
-    const scope = 'instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement';
-    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+    // Instagram Business Login — users log in with their Instagram credentials directly
+    const scope = 'instagram_business_basic,instagram_business_manage_insights';
+    const oauthUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
     res.redirect(oauthUrl);
   });
 
-  // Instagram OAuth - Callback
+  // Instagram OAuth - Callback (Instagram Business Login)
   app.get(["/api/instagram/oauth/callback", "/api/instagram/oauth/callback/"], async (req: any, res) => {
     const { code, state, error: oauthError } = req.query as any;
     if (oauthError) {
@@ -990,31 +978,35 @@ async function startServer() {
       const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
       const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
 
-      // Exchange code for short-lived token
-      const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${FB_APP_SECRET}&code=${code}`);
+      // Exchange code for short-lived Instagram User Access Token
+      const tokenParams = new URLSearchParams({
+        client_id: FB_APP_ID,
+        client_secret: FB_APP_SECRET,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri
+      });
+      const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenParams.toString()
+      });
       const tokenData = await tokenRes.json();
-      if (tokenData.error) throw new Error(tokenData.error.message);
+      if (tokenData.error_type || tokenData.error) {
+        throw new Error(tokenData.error_message || tokenData.error?.message || 'Failed to exchange token');
+      }
       const shortToken = tokenData.access_token;
 
       // Exchange for long-lived token (~60 days)
-      const llRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&fb_exchange_token=${shortToken}`);
+      const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&access_token=${shortToken}`);
       const llData = await llRes.json();
       const longToken = llData.access_token || shortToken;
 
-      // Get IG Business/Creator account linked to Facebook Pages
-      const accountRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,name,username,profile_picture_url}&access_token=${longToken}`);
-      const accountData = await accountRes.json();
-      let igUser: any = null;
-      if (accountData.data?.length > 0) {
-        for (const page of accountData.data) {
-          if (page.instagram_business_account) {
-            igUser = page.instagram_business_account;
-            break;
-          }
-        }
-      }
-      if (!igUser) {
-        return res.send(popupCloseHtml({ error: 'No Instagram Business or Creator account found. Make sure your Instagram account is set to Business or Creator and is linked to a Facebook Page.' }));
+      // Get Instagram user info
+      const userRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${longToken}`);
+      const igUser = await userRes.json();
+      if (igUser.error) {
+        throw new Error(igUser.error.message || 'Failed to fetch Instagram user info');
       }
 
       // Save token to DB for logged-in users
@@ -1067,33 +1059,21 @@ async function startServer() {
     }
   });
 
-  // Instagram - Connect token (manual paste from Graph API Explorer)
+  // Instagram - Connect token (manual paste fallback using Instagram Business Login token)
   app.post(["/api/instagram/connect-token", "/api/instagram/connect-token/"], authenticateToken, async (req: any, res) => {
     const { accessToken } = req.body;
     if (!accessToken) {
       return res.status(400).json({ error: "accessToken is required" });
     }
     try {
-      // Validate token and get IG Business account info
-      const meRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`);
-      const meData = await meRes.json();
-      if (meData.error) {
-        return res.status(400).json({ error: `Invalid token: ${meData.error.message}` });
+      // Validate using Instagram Business Login endpoint
+      const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${accessToken}`);
+      const igUser = await meRes.json();
+      if (igUser.error) {
+        return res.status(400).json({ error: `Invalid token: ${igUser.error.message}` });
       }
-      
-      // Find IG Business account
-      let igUser: any = null;
-      if (meData.data?.length > 0) {
-        for (const page of meData.data) {
-          if (page.instagram_business_account) {
-            igUser = page.instagram_business_account;
-            break;
-          }
-        }
-      }
-      
-      if (!igUser) {
-        return res.status(400).json({ error: "No Instagram Business or Creator account found. Make sure your Instagram account is set to Business or Creator and linked to a Facebook Page." });
+      if (!igUser.id) {
+        return res.status(400).json({ error: "Could not find Instagram account for this token." });
       }
 
       // Save token + account info
