@@ -5,7 +5,7 @@ import {
   Heart, MessageCircle, Bookmark, Share2,
   Sparkles, AlertCircle, CheckCircle2, ThumbsUp, ThumbsDown,
   BarChart3, Loader2, ExternalLink, LogOut, User as UserIcon,
-  RefreshCcw
+  RefreshCcw, ChevronDown, ChevronUp, KeyRound
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -104,6 +104,9 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [showTokenFallback, setShowTokenFallback] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const popupRef = useRef<Window | null>(null);
 
   const [videoUrl, setVideoUrl] = useState('');
@@ -170,6 +173,32 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
         setConnecting(false);
       }
     }, 500);
+  };
+
+  const handleVerifyToken = async () => {
+    if (!tokenInput.trim()) return;
+    setVerifying(true);
+    setConnectError(null);
+    try {
+      const res = await fetch('/api/instagram/connect-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ accessToken: tokenInput.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification failed');
+      setAccount(data.account);
+      setIgToken(tokenInput.trim());
+      setTokenInput('');
+      setShowTokenFallback(false);
+    } catch (err: any) {
+      setConnectError(err.message || 'Invalid token. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -296,7 +325,56 @@ export default function VideoAnalytics({ onBack, token: authToken }: Props) {
                 </motion.div>
               )}
 
-              <div className="mt-6 pt-5 border-t border-zinc-100">
+              {/* Divider */}
+              <div className="mt-6 flex items-center gap-3">
+                <div className="flex-1 h-px bg-zinc-100" />
+                <span className="text-xs text-zinc-400 font-medium">or</span>
+                <div className="flex-1 h-px bg-zinc-100" />
+              </div>
+
+              {/* Manual token fallback */}
+              <button
+                onClick={() => setShowTokenFallback(!showTokenFallback)}
+                className="mt-4 flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors mx-auto"
+              >
+                <KeyRound size={13} />
+                Paste access token manually
+                {showTokenFallback ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+
+              <AnimatePresence>
+                {showTokenFallback && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-4 p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-3 text-left">
+                      <p className="text-xs text-zinc-500">
+                        Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="text-brand-primary font-semibold hover:underline">Graph API Explorer <ExternalLink size={10} className="inline" /></a>, generate a token with <code className="bg-zinc-100 px-1 rounded text-[10px]">instagram_business_basic</code> and <code className="bg-zinc-100 px-1 rounded text-[10px]">instagram_business_manage_insights</code> permissions, then paste it here.
+                      </p>
+                      <input
+                        type="password"
+                        value={tokenInput}
+                        onChange={e => setTokenInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleVerifyToken()}
+                        placeholder="Paste your access token..."
+                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all bg-white"
+                      />
+                      <button
+                        onClick={handleVerifyToken}
+                        disabled={verifying || !tokenInput.trim()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-brand-primary text-white font-semibold text-sm hover:bg-brand-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {verifying ? <><Loader2 size={14} className="animate-spin" /> Verifying...</> : <><CheckCircle2 size={14} /> Verify & Connect</>}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="mt-5 pt-5 border-t border-zinc-100">
                 <p className="text-[11px] text-zinc-400">
                   Requires an Instagram Business or Creator account.
                   Your token is stored securely and only used to fetch your own Reel metrics.
