@@ -709,14 +709,17 @@ async function startServer() {
 
   app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
     const { completed_days, day_checklist, day_notes } = req.body;
+    console.log(`[PATCH /progress] Strategy ${req.params.id}, day_notes:`, day_notes ? Object.keys(day_notes).length + " days" : "none");
     try {
       const db = getPool();
-      await db.execute(
+      const result = await db.execute(
         'UPDATE strategies SET completed_days = ?, day_checklist = ?, day_notes = ? WHERE id = ? AND user_id = ?',
         [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), JSON.stringify(day_notes || {}), req.params.id, req.user.id]
       );
+      console.log(`[PATCH /progress] Updated ${result[0].affectedRows} rows`);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`[PATCH /progress] Error:`, error.message);
       res.status(500).json({ error: "Server error" });
     }
   });
