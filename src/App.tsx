@@ -1888,15 +1888,14 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       if (token && series.id) {
         setNotesSaving(true);
         try {
-          await robustFetch(`/api/strategies/${series.id}/progress`, {
+          await robustFetch(`/api/strategies/${series.id}/notes`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ completed_days: completedDays, day_checklist: dayChecklist, day_notes: updatedNotes })
+            body: JSON.stringify({ day_notes: updatedNotes })
           });
-          // Update sessionStorage with fresh data so next visit has the saved notes
           const updatedSeries = { ...series, day_notes: updatedNotes };
           sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
         } catch (err) {
@@ -1933,10 +1932,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist, day_notes: dayNotes })
+        body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist })
       })
       .then(() => {
-        // Update sessionStorage with fresh data
         const updatedSeries = { ...series, day_checklist: updatedChecklist };
         sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
       })
@@ -2013,9 +2011,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ completed_days: newCompleted, day_checklist: dayChecklist, day_notes: dayNotes })
+          body: JSON.stringify({ completed_days: newCompleted, day_checklist: dayChecklist })
         });
-        // Update sessionStorage with fresh data
         const updatedSeries = { ...series, completed_days: newCompleted };
         sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
       } catch (error) {

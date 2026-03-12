@@ -668,7 +668,7 @@ async function startServer() {
             start_date: s.start_date,
             completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
             day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
-            day_notes: typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : (s.day_notes || {}),
+            day_notes: (() => { try { return s.day_notes ? (typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : s.day_notes) : {}; } catch { return {}; } })(),
             created_at: s.created_at
           };
         } catch (parseErr) {
@@ -708,18 +708,32 @@ async function startServer() {
   });
 
   app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
-    const { completed_days, day_checklist, day_notes } = req.body;
-    console.log(`[PATCH /progress] Strategy ${req.params.id}, day_notes:`, day_notes ? Object.keys(day_notes).length + " days" : "none");
+    const { completed_days, day_checklist } = req.body;
     try {
       const db = getPool();
-      const result = await db.execute(
-        'UPDATE strategies SET completed_days = ?, day_checklist = ?, day_notes = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), JSON.stringify(day_notes || {}), req.params.id, req.user.id]
+      await db.execute(
+        'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), req.params.id, req.user.id]
       );
-      console.log(`[PATCH /progress] Updated ${result[0].affectedRows} rows`);
       res.json({ success: true });
     } catch (error: any) {
       console.error(`[PATCH /progress] Error:`, error.message);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Dedicated endpoint to save only day notes — avoids overwriting other fields
+  app.patch(["/api/strategies/:id/notes", "/api/strategies/:id/notes/"], authenticateToken, async (req: any, res) => {
+    const { day_notes } = req.body;
+    try {
+      const db = getPool();
+      await db.execute(
+        'UPDATE strategies SET day_notes = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(day_notes || {}), req.params.id, req.user.id]
+      );
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error(`[PATCH /notes] Error:`, error.message);
       res.status(500).json({ error: "Server error" });
     }
   });
