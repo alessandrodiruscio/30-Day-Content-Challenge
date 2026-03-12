@@ -1895,6 +1895,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
             },
             body: JSON.stringify({ completed_days: completedDays, day_checklist: dayChecklist, day_notes: updatedNotes })
           });
+          // Update sessionStorage with fresh data so next visit has the saved notes
+          const updatedSeries = { ...series, day_notes: updatedNotes };
+          sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
         } catch (err) {
           console.error("Failed to save note:", err);
         } finally {
@@ -1930,7 +1933,13 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ completed_days: completedDays, day_checklist: updatedChecklist, day_notes: dayNotes })
-      }).catch(err => console.error("Failed to save checklist progress:", err));
+      })
+      .then(() => {
+        // Update sessionStorage with fresh data
+        const updatedSeries = { ...series, day_checklist: updatedChecklist };
+        sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
+      })
+      .catch(err => console.error("Failed to save checklist progress:", err));
     }
     
     // Check if all tasks are now completed
@@ -2005,6 +2014,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           },
           body: JSON.stringify({ completed_days: newCompleted, day_checklist: dayChecklist, day_notes: dayNotes })
         });
+        // Update sessionStorage with fresh data
+        const updatedSeries = { ...series, completed_days: newCompleted };
+        sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
       } catch (error) {
         console.error("Failed to sync progress:", error);
       }
