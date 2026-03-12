@@ -3138,10 +3138,11 @@ function TeleprompterOverlay({
   const [showStoryboardLive, setShowStoryboardLive] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState(0);
+  const [isPaused, setIsPaused] = React.useState(false);
 
   // Scroll for full teleprompter mode - smooth with 60fps
   React.useEffect(() => {
-    if (!running || !scrollRef.current || isDragging) return;
+    if (!running || !scrollRef.current || isDragging || isPaused) return;
     const interval = setInterval(() => {
       if (scrollRef.current) {
         const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
@@ -3156,7 +3157,7 @@ function TeleprompterOverlay({
       }
     }, 16);
     return () => clearInterval(interval);
-  }, [running, speed, isDragging]);
+  }, [running, speed, isDragging, isPaused]);
 
   // Mouse/touch drag to navigate - memoized to avoid render issues
   const handleMouseDown = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -3355,9 +3356,9 @@ function TeleprompterOverlay({
           </div>
         </div>
 
-        {/* Storyboard button - center top */}
+        {/* Storyboard button - left top */}
         {storyboard && (
-          <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-40 pointer-events-auto">
+          <div className="absolute top-6 left-6 z-40 pointer-events-auto">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -3381,12 +3382,12 @@ function TeleprompterOverlay({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onRunningChange(false);
+              setIsPaused(!isPaused);
             }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm pointer-events-auto"
           >
             <Pause size={18} />
-            Pause
+            {isPaused ? 'Resume' : 'Pause'}
           </button>
           <button
             onClick={(e) => {
