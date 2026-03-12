@@ -125,6 +125,24 @@ async function initDatabase() {
       }
     }
 
+    // Add Instagram OAuth columns
+    const igColumns = [
+      { col: 'instagram_access_token', def: 'TEXT' },
+      { col: 'instagram_ig_user_id', def: 'VARCHAR(255)' },
+      { col: 'instagram_username', def: 'VARCHAR(255)' },
+      { col: 'instagram_profile_pic', def: 'TEXT' },
+    ];
+    for (const { col, def } of igColumns) {
+      try {
+        await pool.execute(`ALTER TABLE users ADD COLUMN ${col} ${def}`);
+        console.log(`✅ Added ${col} column to users table`);
+      } catch (err: any) {
+        if (!err.message.includes('Duplicate column')) {
+          console.warn(`Warning: Could not add ${col} column:`, err.message);
+        }
+      }
+    }
+
     console.log("✅ MySQL database initialized successfully.");
   } catch (error) {
     console.error("❌ Failed to initialize MySQL database:", error);
@@ -332,6 +350,45 @@ async function sendResetEmail(email: string, token: string, origin?: string) {
     console.error("Error sending reset email via Resend:", error);
     throw error;
   }
+}
+
+function popupCloseHtml(data: object): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>Instagram Authorization</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:#fafafa; }
+    .card { text-align:center; padding:32px; background:#fff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,.08); max-width:320px; }
+    .icon { font-size:48px; margin-bottom:16px; }
+    h2 { margin:0 0 8px; font-size:18px; }
+    p { color:#666; font-size:14px; margin:0; }
+  </style>
+</head>
+<body>
+  <div class="card" id="status">
+    <div class="icon">⏳</div>
+    <h2>Connecting...</h2>
+    <p>Please wait while we complete the connection.</p>
+  </div>
+  <script>
+    const data = ${JSON.stringify({ type: 'INSTAGRAM_OAUTH', ...data })};
+    if (data.error) {
+      document.getElementById('status').innerHTML = '<div class="icon">❌</div><h2>Connection Failed</h2><p>' + data.error + '</p>';
+    }
+    if (window.opener) {
+      window.opener.postMessage(data, '*');
+      if (!data.error) {
+        document.getElementById('status').innerHTML = '<div class="icon">✅</div><h2>Connected!</h2><p>You can close this window.</p>';
+        setTimeout(() => window.close(), 1200);
+      }
+    } else {
+      document.getElementById('status').innerHTML = '<div class="icon">' + (data.error ? '❌' : '✅') + '</div><h2>' + (data.error ? 'Error' : 'Done') + '</h2><p>' + (data.error || 'Authorization complete. You can close this window.') + '</p>';
+    }
+  </script>
+</body>
+</html>`;
 }
 
 async function startServer() {
@@ -888,6 +945,144 @@ async function startServer() {
     } catch (err: any) {
       console.error("Instagram analysis error:", err);
       res.status(500).json({ error: err.message || "Analysis failed" });
+    }
+  });
+
+  // Instagram OAuth - Start
+  app.get(["/api/instagram/oauth/start", "/api/instagram/oauth/start/"], async (req: any, res) => {
+    const FB_APP_ID = process.env.FB_APP_ID;
+    if (!FB_APP_ID) {
+      return res.send(popupCloseHtml({ error: 'Instagram OAuth is not configured. Please add FB_APP_ID and FB_APP_SECRET to the app secrets.' }));
+    }
+    const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
+    const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
+    // Accept user JWT from query param (popup can't send headers)
+    const userJwt = (req.query._auth as string) || null;
+    // Validate it before encoding into state
+    let validUserJwt: string | null = null;
+    if (userJwt) {
+      try { jwt.verify(userJwt, JWT_SECRET); validUserJwt = userJwt; } catch (_) {}
+    }
+    const state = jwt.sign({ userJwt: validUserJwt, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET, { expiresIn: '10m' });
+    const scope = 'instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement';
+    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+    res.redirect(oauthUrl);
+  });
+
+  // Instagram OAuth - Callback
+  app.get(["/api/instagram/oauth/callback", "/api/instagram/oauth/callback/"], async (req: any, res) => {
+    const { code, state, error: oauthError } = req.query as any;
+    if (oauthError) {
+      return res.send(popupCloseHtml({ error: 'Authorization was cancelled or denied.' }));
+    }
+    const FB_APP_ID = process.env.FB_APP_ID;
+    const FB_APP_SECRET = process.env.FB_APP_SECRET;
+    if (!FB_APP_ID || !FB_APP_SECRET) {
+      return res.send(popupCloseHtml({ error: 'Instagram OAuth is not configured on this server.' }));
+    }
+    try {
+      let stateData: any = {};
+      try {
+        stateData = jwt.verify(state, JWT_SECRET) as any;
+      } catch (e) {
+        return res.send(popupCloseHtml({ error: 'Invalid or expired state. Please try connecting again.' }));
+      }
+      const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
+      const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
+
+      // Exchange code for short-lived token
+      const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${FB_APP_SECRET}&code=${code}`);
+      const tokenData = await tokenRes.json();
+      if (tokenData.error) throw new Error(tokenData.error.message);
+      const shortToken = tokenData.access_token;
+
+      // Exchange for long-lived token (~60 days)
+      const llRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&fb_exchange_token=${shortToken}`);
+      const llData = await llRes.json();
+      const longToken = llData.access_token || shortToken;
+
+      // Get IG Business/Creator account linked to Facebook Pages
+      const accountRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,name,username,profile_picture_url}&access_token=${longToken}`);
+      const accountData = await accountRes.json();
+      let igUser: any = null;
+      if (accountData.data?.length > 0) {
+        for (const page of accountData.data) {
+          if (page.instagram_business_account) {
+            igUser = page.instagram_business_account;
+            break;
+          }
+        }
+      }
+      if (!igUser) {
+        return res.send(popupCloseHtml({ error: 'No Instagram Business or Creator account found. Make sure your Instagram account is set to Business or Creator and is linked to a Facebook Page.' }));
+      }
+
+      // Save token to DB for logged-in users
+      if (stateData.userJwt) {
+        try {
+          const decoded = jwt.verify(stateData.userJwt, JWT_SECRET) as any;
+          const db = getPool();
+          await db.execute(
+            'UPDATE users SET instagram_access_token = ?, instagram_ig_user_id = ?, instagram_username = ?, instagram_profile_pic = ? WHERE id = ?',
+            [longToken, igUser.id, igUser.username, igUser.profile_picture_url || null, decoded.id]
+          );
+        } catch (e) {
+          console.error("Failed to save Instagram token to user:", e);
+        }
+      }
+
+      return res.send(popupCloseHtml({
+        success: true,
+        account: { id: igUser.id, username: igUser.username, profile_pic: igUser.profile_picture_url || null },
+        token: longToken
+      }));
+    } catch (err: any) {
+      console.error("Instagram OAuth callback error:", err);
+      return res.send(popupCloseHtml({ error: err.message || 'OAuth failed. Please try again.' }));
+    }
+  });
+
+  // Instagram - Get connection status (for logged-in users)
+  app.get(["/api/instagram/status", "/api/instagram/status/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      const [rows]: any = await db.execute(
+        'SELECT instagram_access_token, instagram_ig_user_id, instagram_username, instagram_profile_pic FROM users WHERE id = ?',
+        [req.user.id]
+      );
+      if (!rows[0]?.instagram_access_token) {
+        return res.json({ connected: false });
+      }
+      return res.json({
+        connected: true,
+        account: {
+          id: rows[0].instagram_ig_user_id,
+          username: rows[0].instagram_username,
+          profile_pic: rows[0].instagram_profile_pic
+        },
+        token: rows[0].instagram_access_token
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Instagram - Check if OAuth is configured
+  app.get(["/api/instagram/config", "/api/instagram/config/"], (req, res) => {
+    res.json({ configured: !!(process.env.FB_APP_ID && process.env.FB_APP_SECRET) });
+  });
+
+  // Instagram - Disconnect account
+  app.delete(["/api/instagram/disconnect", "/api/instagram/disconnect/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      await db.execute(
+        'UPDATE users SET instagram_access_token = NULL, instagram_ig_user_id = NULL, instagram_username = NULL, instagram_profile_pic = NULL WHERE id = ?',
+        [req.user.id]
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
