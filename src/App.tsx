@@ -40,7 +40,13 @@ import {
   Image as ImageIcon,
   BookOpen,
   Grid3X3,
-  NotebookPen
+  NotebookPen,
+  Edit2,
+  Clock,
+  Pause,
+  Volume2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
 import { robustFetch, safeJson } from './utils/api';
@@ -349,6 +355,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(!!token);
   const hasApiKey = true;
+
+  // Script editing and teleprompter state
+  const [editingScript, setEditingScript] = useState<{ day: number; hook: number } | null>(null);
+  const [editedScriptText, setEditedScriptText] = useState('');
+  const [showVersionHistory, setShowVersionHistory] = useState<{ day: number; hook: number } | null>(null);
+  const [scriptVersions, setScriptVersions] = useState<any[]>([]);
+  const [versionHistorySaving, setVersionHistorySaving] = useState(false);
+  const [showTeleprompter, setShowTeleprompter] = useState(false);
+  const [teleprompterSpeed, setTeleprompterSpeed] = useState(1);
+  const [teleprompterFontSize, setTeleprompterFontSize] = useState(3);
+  const [teleprompterRunning, setTeleprompterRunning] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -1906,6 +1923,85 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       }
     }, 1500);
   };
+
+  // Save edited script and create version snapshot
+  const saveScriptEdit = async () => {
+    if (!editingScript || !token || !series.id) return;
+    try {
+      await robustFetch(`/api/strategies/${series.id}/script`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          day_number: editingScript.day,
+          hook_index: editingScript.hook,
+          new_script: editedScriptText
+        })
+      });
+      // Update local series data
+      const updatedSeries = { ...series };
+      updatedSeries.days[editingScript.day - 1].scripts[editingScript.hook] = editedScriptText;
+      sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
+      setEditingScript(null);
+    } catch (err) {
+      console.error("Failed to save script:", err);
+    }
+  };
+
+  // Fetch version history for a script
+  const fetchVersionHistory = async (day: number, hook: number) => {
+    if (!token || !series.id) return;
+    try {
+      setVersionHistorySaving(true);
+      const res = await robustFetch(`/api/strategies/${series.id}/script-versions?day=${day}&hook=${hook}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await safeJson(res);
+        setScriptVersions(data.versions || []);
+        setShowVersionHistory({ day, hook });
+      }
+    } catch (err) {
+      console.error("Failed to fetch versions:", err);
+    } finally {
+      setVersionHistorySaving(false);
+    }
+  };
+
+  // Restore a previous script version
+  const restoreVersion = async (versionId: number) => {
+    if (!editingScript && !showVersionHistory || !token || !series.id) return;
+    const target = showVersionHistory || editingScript;
+    if (!target) return;
+    try {
+      await robustFetch(`/api/strategies/${series.id}/script-versions/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          version_id: versionId,
+          day_number: target.day,
+          hook_index: target.hook
+        })
+      });
+      // Refresh the series
+      const res = await robustFetch(`/api/strategies/${series.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await safeJson(res);
+        sessionStorage.setItem('selectedSeries', JSON.stringify(data));
+        setShowVersionHistory(null);
+        await fetchVersionHistory(target.day, target.hook);
+      }
+    } catch (err) {
+      console.error("Failed to restore version:", err);
+    }
+  };
   
   const completionTasks = [
     { id: 'social', label: 'Shared on social media' },
@@ -2723,30 +2819,164 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     ) : (
                       /* ── REEL VIEW ── */
                       <div className="space-y-3">
-                        <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
-                          {showStoryboard ? (
-                            <div className="space-y-3">
-                              {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
-                                const storyboardLines = currentDay.visuals.split('\n');
-                                const storyboardForParagraph = storyboardLines[idx];
-                                return (
-                                  <div key={idx}>
-                                    <p>{paragraph}</p>
-                                    {storyboardForParagraph && (
-                                      <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
-                                        <strong className="block mb-1">{t('detail.creatorAction')}</strong>
-                                        {storyboardForParagraph}
+                        {editingScript && editingScript.day === activeDay && editingScript.hook === currentHookIndex ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={editedScriptText}
+                              onChange={(e) => setEditedScriptText(e.target.value)}
+                              className="w-full p-3 md:p-6 rounded-xl md:rounded-2xl bg-white border-2 border-brand-primary/30 focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 outline-none text-base md:text-lg leading-relaxed font-sans resize-none min-h-[200px]"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={saveScriptEdit}
+                                className="flex-1 px-4 py-2 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-primary/90 transition-all"
+                              >
+                                Save Edit
+                              </button>
+                              <button
+                                onClick={() => setEditingScript(null)}
+                                className="flex-1 px-4 py-2 rounded-lg border border-zinc-200 text-zinc-700 font-semibold hover:bg-zinc-50 transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex gap-2 mb-3">
+                              <button
+                                onClick={() => {
+                                  setEditingScript({ day: activeDay, hook: currentHookIndex });
+                                  setEditedScriptText(displayScript);
+                                }}
+                                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-zinc-50 border border-zinc-200 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all text-sm font-medium text-zinc-700"
+                                title="Edit script"
+                              >
+                                <Edit2 size={14} />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setShowTeleprompter(true)}
+                                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-zinc-50 border border-zinc-200 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all text-sm font-medium text-zinc-700"
+                                title="Teleprompter mode"
+                              >
+                                <Play size={14} />
+                                Teleprompter
+                              </button>
+                              <button
+                                onClick={() => fetchVersionHistory(activeDay, currentHookIndex)}
+                                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-zinc-50 border border-zinc-200 hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all text-sm font-medium text-zinc-700"
+                                title="Version history"
+                              >
+                                <History size={14} />
+                                History
+                              </button>
+                            </div>
+                            <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
+                              {showStoryboard ? (
+                                <div className="space-y-3">
+                                  {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
+                                    const storyboardLines = currentDay.visuals.split('\n');
+                                    const storyboardForParagraph = storyboardLines[idx];
+                                    return (
+                                      <div key={idx}>
+                                        <p>{paragraph}</p>
+                                        {storyboardForParagraph && (
+                                          <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs md:text-sm text-blue-900 italic">
+                                            <strong className="block mb-1">{t('detail.creatorAction')}</strong>
+                                            {storyboardForParagraph}
+                                          </div>
+                                        )}
                                       </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                displayScript
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Version History Modal */}
+                    {showVersionHistory && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={() => setShowVersionHistory(null)}
+                      >
+                        <motion.div
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.95, opacity: 0 }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-96 overflow-y-auto"
+                        >
+                          <div className="sticky top-0 bg-gradient-to-r from-brand-primary/10 to-blue-50 border-b border-brand-primary/10 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                              <History size={18} className="text-brand-primary" />
+                              Version History
+                            </h3>
+                            <button
+                              onClick={() => setShowVersionHistory(null)}
+                              className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                            >
+                              <X size={20} />
+                            </button>
+                          </div>
+                          <div className="p-4 space-y-2">
+                            {scriptVersions.length === 0 ? (
+                              <p className="text-sm text-zinc-500 text-center py-6">No previous versions</p>
+                            ) : (
+                              scriptVersions.map((version: any, idx: number) => (
+                                <div
+                                  key={version.id}
+                                  className="p-3 rounded-lg border border-zinc-100 hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all"
+                                >
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <span className="text-xs font-semibold text-zinc-500">
+                                      {idx === 0 ? 'Current' : `Version ${scriptVersions.length - idx}`}
+                                    </span>
+                                    {idx > 0 && (
+                                      <button
+                                        onClick={() => restoreVersion(version.id)}
+                                        className="text-xs px-2 py-1 rounded bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 transition-all font-semibold"
+                                      >
+                                        Restore
+                                      </button>
                                     )}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            displayScript
-                          )}
-                        </div>
-                      </div>
+                                  <p className="text-xs text-zinc-600">
+                                    {new Date(version.created_at).toLocaleDateString()} {new Date(version.created_at).toLocaleTimeString()}
+                                  </p>
+                                  <p className="text-xs text-zinc-700 mt-2 line-clamp-2">{version.script_text.substring(0, 100)}</p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+
+                    {/* Teleprompter Overlay */}
+                    {showTeleprompter && (
+                      <TeleprompterOverlay
+                        script={displayScript}
+                        onClose={() => {
+                          setShowTeleprompter(false);
+                          setTeleprompterRunning(false);
+                        }}
+                        speed={teleprompterSpeed}
+                        fontSize={teleprompterFontSize}
+                        onSpeedChange={setTeleprompterSpeed}
+                        onFontSizeChange={setTeleprompterFontSize}
+                        running={teleprompterRunning}
+                        onRunningChange={setTeleprompterRunning}
+                      />
                     )}
                   </section>
 
@@ -2876,6 +3106,169 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       )}
       </div>
     </>
+  );
+}
+
+function TeleprompterOverlay({
+  script,
+  onClose,
+  speed,
+  fontSize,
+  onSpeedChange,
+  onFontSizeChange,
+  running,
+  onRunningChange
+}: {
+  script: string;
+  onClose: () => void;
+  speed: number;
+  fontSize: number;
+  onSpeedChange: (s: number) => void;
+  onFontSizeChange: (s: number) => void;
+  running: boolean;
+  onRunningChange: (r: boolean) => void;
+}) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [scrollPosition, setScrollPosition] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!running || !scrollRef.current) return;
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const maxScroll = scrollRef.current.scrollHeight - scrollRef.current.clientHeight;
+        setScrollPosition(prev => {
+          const next = prev + (speed / 10);
+          if (next >= maxScroll) {
+            onRunningChange(false);
+            return prev;
+          }
+          return next;
+        });
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [running, speed, onRunningChange]);
+
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollPosition;
+    }
+  }, [scrollPosition]);
+
+  if (!running) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-4"
+      >
+        <div className="max-w-md w-full space-y-6">
+          <h2 className="text-2xl font-bold text-white text-center">Teleprompter Settings</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-white text-sm font-semibold block mb-2">Speed: {speed}</label>
+              <input
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.1"
+                value={speed}
+                onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
+                className="w-full accent-brand-primary"
+              />
+            </div>
+            
+            <div>
+              <label className="text-white text-sm font-semibold block mb-2">Font Size</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onFontSizeChange(Math.max(1, fontSize - 1))}
+                  className="flex-1 px-3 py-2 rounded-lg bg-brand-primary/20 hover:bg-brand-primary/30 text-white transition-all"
+                >
+                  <ZoomOut size={18} className="mx-auto" />
+                </button>
+                <button
+                  onClick={() => onFontSizeChange(Math.min(5, fontSize + 1))}
+                  className="flex-1 px-3 py-2 rounded-lg bg-brand-primary/20 hover:bg-brand-primary/30 text-white transition-all"
+                >
+                  <ZoomIn size={18} className="mx-auto" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onRunningChange(true)}
+            className="w-full py-3 rounded-lg bg-brand-primary text-white font-bold flex items-center justify-center gap-2 hover:bg-brand-primary/90 transition-all"
+          >
+            <Play size={20} />
+            Start Teleprompter
+          </button>
+
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-lg border border-white text-white font-semibold hover:bg-white/10 transition-all"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black flex flex-col"
+      onClick={() => onRunningChange(false)}
+    >
+      <div className="flex-1 flex flex-col items-center justify-center overflow-hidden relative">
+        <div
+          ref={scrollRef}
+          className="w-full h-full overflow-hidden flex flex-col items-center justify-start pt-10 pb-10"
+          style={{
+            fontSize: `${fontSize * 0.5}rem`
+          }}
+        >
+          <div className="text-white leading-loose whitespace-pre-wrap text-center px-8 max-w-2xl font-sans">
+            {script}
+            <div className="h-96" />
+          </div>
+        </div>
+
+        {/* Controls overlay */}
+        <div className="absolute top-6 right-6 flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunningChange(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm"
+          >
+            <Pause size={18} />
+            Pause
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm"
+          >
+            <X size={18} />
+            Exit
+          </button>
+        </div>
+      </div>
+
+      <div className="text-center text-white text-sm py-4">
+        Tap to pause • Swipe or drag to control scroll
+      </div>
+    </motion.div>
   );
 }
 

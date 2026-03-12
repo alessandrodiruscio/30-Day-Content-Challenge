@@ -127,6 +127,25 @@ async function initDatabase() {
         console.error("Warning: Could not add day_notes column:", err.message);
       }
     }
+
+    // Create script versions table for version history
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS strategy_script_versions (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          strategy_id BIGINT NOT NULL,
+          day_number INT NOT NULL,
+          hook_index INT NOT NULL,
+          script_text LONGTEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
+          INDEX(strategy_id, day_number, hook_index)
+        )
+      `);
+      console.log("✅ Script versions table created/exists");
+    } catch (err: any) {
+      console.error("Warning: Could not create script versions table:", err.message);
+    }
     
     // Upgrade existing tables from TEXT to LONGTEXT
     try {
@@ -734,6 +753,114 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error(`[PATCH /notes] Error:`, error.message);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Endpoint to edit and save a script for a specific day/hook
+  app.patch(["/api/strategies/:id/script", "/api/strategies/:id/script/"], authenticateToken, async (req: any, res) => {
+    const { day_number, hook_index, new_script } = req.body;
+    try {
+      const db = getPool();
+      // Get current strategy to snapshot current version
+      const [rows]: any = await db.execute(
+        'SELECT data FROM strategies WHERE id = ? AND user_id = ?',
+        [req.params.id, req.user.id]
+      );
+      
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({ error: "Strategy not found" });
+      }
+
+      const currentData = JSON.parse(rows[0].data);
+      const currentScript = currentData.days[day_number - 1]?.scripts?.[hook_index] || '';
+
+      // Create version snapshot of old script before overwriting
+      if (currentScript) {
+        await db.execute(
+          'INSERT INTO strategy_script_versions (strategy_id, day_number, hook_index, script_text) VALUES (?, ?, ?, ?)',
+          [req.params.id, day_number, hook_index, currentScript]
+        );
+      }
+
+      // Update the strategy with new script
+      currentData.days[day_number - 1].scripts[hook_index] = new_script;
+      await db.execute(
+        'UPDATE strategies SET data = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(currentData), req.params.id, req.user.id]
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error(`[PATCH /script] Error:`, error.message);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Endpoint to fetch version history for a specific day/hook
+  app.get(["/api/strategies/:id/script-versions", "/api/strategies/:id/script-versions/"], authenticateToken, async (req: any, res) => {
+    const { day, hook } = req.query;
+    try {
+      const db = getPool();
+      const [versions]: any = await db.execute(
+        'SELECT * FROM strategy_script_versions WHERE strategy_id = ? AND day_number = ? AND hook_index = ? ORDER BY created_at DESC LIMIT 20',
+        [req.params.id, day, hook]
+      );
+      res.json({ versions });
+    } catch (error: any) {
+      console.error(`[GET /script-versions] Error:`, error.message);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Endpoint to restore a previous script version
+  app.post(["/api/strategies/:id/script-versions/restore", "/api/strategies/:id/script-versions/restore/"], authenticateToken, async (req: any, res) => {
+    const { version_id, day_number, hook_index } = req.body;
+    try {
+      const db = getPool();
+      // Get the version to restore
+      const [versionRows]: any = await db.execute(
+        'SELECT script_text FROM strategy_script_versions WHERE id = ? AND strategy_id = ?',
+        [version_id, req.params.id]
+      );
+
+      if (!versionRows || versionRows.length === 0) {
+        return res.status(404).json({ error: "Version not found" });
+      }
+
+      const restoredScript = versionRows[0].script_text;
+
+      // Get current strategy
+      const [strategyRows]: any = await db.execute(
+        'SELECT data FROM strategies WHERE id = ? AND user_id = ?',
+        [req.params.id, req.user.id]
+      );
+
+      if (!strategyRows || strategyRows.length === 0) {
+        return res.status(404).json({ error: "Strategy not found" });
+      }
+
+      const currentData = JSON.parse(strategyRows[0].data);
+      const currentScript = currentData.days[day_number - 1]?.scripts?.[hook_index] || '';
+
+      // Create snapshot of current (before restoring)
+      if (currentScript) {
+        await db.execute(
+          'INSERT INTO strategy_script_versions (strategy_id, day_number, hook_index, script_text) VALUES (?, ?, ?, ?)',
+          [req.params.id, day_number, hook_index, currentScript]
+        );
+      }
+
+      // Restore the old version
+      currentData.days[day_number - 1].scripts[hook_index] = restoredScript;
+      await db.execute(
+        'UPDATE strategies SET data = ? WHERE id = ? AND user_id = ?',
+        [JSON.stringify(currentData), req.params.id, req.user.id]
+      );
+
+      res.json({ success: true, restored_script: restoredScript });
+    } catch (error: any) {
+      console.error(`[POST /restore] Error:`, error.message);
       res.status(500).json({ error: "Server error" });
     }
   });
