@@ -63,3 +63,18 @@ export async function safeJson(res: Response) {
     throw new Error("The server response was corrupted. Please try again.");
   }
 }
+
+/**
+ * Fetch user's achievements
+ */
+export async function fetchAchievements(token: string, strategyId?: number) {
+  const url = strategyId ? `/api/achievements?strategy_id=${strategyId}` : '/api/achievements';
+  const res = await robustFetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!res.ok) throw new Error('Failed to fetch achievements');
+  return safeJson(res);
+}

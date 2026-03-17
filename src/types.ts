@@ -40,3 +40,15 @@ export interface UserProfile {
   contentType: string;
   startDate?: string;
 }
+
+export interface Achievement {
+  id: number;
+  code: string;
+  name_en: string;
+  name_es: string;
+  description_en: string;
+  description_es: string;
+  icon: string;
+  tier: 'bronze' | 'silver' | 'gold';
+  unlocked_at?: string;
+}

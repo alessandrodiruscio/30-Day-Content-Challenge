@@ -174,6 +174,69 @@ async function initDatabase() {
       }
     }
 
+    // Create achievements table
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS achievements (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          code VARCHAR(255) UNIQUE NOT NULL,
+          name_en VARCHAR(255) NOT NULL,
+          name_es VARCHAR(255) NOT NULL,
+          description_en TEXT NOT NULL,
+          description_es TEXT NOT NULL,
+          icon VARCHAR(255) NOT NULL,
+          tier VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log("✅ Achievements table created/exists");
+
+      // Insert default achievements
+      const defaultAchievements = [
+        { code: 'first_step', name_en: 'First Step', name_es: 'Primer Paso', desc_en: 'Posted content on Day 1', desc_es: 'Publicó contenido el Día 1', icon: '🚀', tier: 'bronze' },
+        { code: 'streak_3', name_en: 'Streak Starter', name_es: 'Iniciador de Racha', desc_en: '3 days posted in a row', desc_es: '3 días publicados seguidos', icon: '🔥', tier: 'bronze' },
+        { code: 'streak_7', name_en: 'Week Warrior', name_es: 'Guerrero Semanal', desc_en: '7 days posted in a row', desc_es: '7 días publicados seguidos', icon: '⚡', tier: 'silver' },
+        { code: 'streak_14', name_en: 'Two Week Titan', name_es: 'Titán de Dos Semanas', desc_en: '14 days posted in a row', desc_es: '14 días publicados seguidos', icon: '💎', tier: 'silver' },
+        { code: 'month_master', name_en: 'Month Master', name_es: 'Maestro del Mes', desc_en: 'Completed all 30 days', desc_es: 'Completó los 30 días', icon: '👑', tier: 'gold' },
+        { code: 'consistent_15', name_en: 'Consistent Creator', name_es: 'Creador Consistente', desc_en: 'Posted on 15+ days', desc_es: 'Publicó en 15+ días', icon: '🎯', tier: 'bronze' },
+        { code: 'comeback_kid', name_en: 'Comeback Kid', name_es: 'Campeón de Regreso', desc_en: 'Resumed after a gap, posted 5+ more days', desc_es: 'Reanudó después de una brecha', icon: '💪', tier: 'silver' }
+      ];
+
+      for (const ach of defaultAchievements) {
+        try {
+          await pool.execute(
+            `INSERT IGNORE INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [ach.code, ach.name_en, ach.name_es, ach.desc_en, ach.desc_es, ach.icon, ach.tier]
+          );
+        } catch (err: any) {
+          // Silently ignore duplicate entries
+        }
+      }
+    } catch (err: any) {
+      console.error("Warning: Could not create achievements table:", err.message);
+    }
+
+    // Create user_achievements table
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS user_achievements (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          user_id BIGINT NOT NULL,
+          achievement_id INT NOT NULL,
+          strategy_id BIGINT,
+          unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE,
+          FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
+          UNIQUE KEY unique_user_achievement (user_id, achievement_id, strategy_id)
+        )
+      `);
+      console.log("✅ User achievements table created/exists");
+    } catch (err: any) {
+      console.error("Warning: Could not create user_achievements table:", err.message);
+    }
+
     console.log("✅ MySQL database initialized successfully.");
   } catch (error) {
     console.error("❌ Failed to initialize MySQL database:", error);
@@ -726,6 +789,59 @@ async function startServer() {
     }
   });
 
+  // Helper function to check and award achievements
+  async function checkAndAwardAchievements(userId: number, strategyId: number, completedDays: any[]) {
+    try {
+      const db = getPool();
+      const daysCompleted = completedDays.filter((d: any) => d).length;
+      const dayNumbers = completedDays.map((d: any, i: number) => d ? i + 1 : null).filter(Boolean);
+      
+      // Calculate longest consecutive streak
+      let longestStreak = 0;
+      let currentStreak = 0;
+      for (let i = 0; i < completedDays.length; i++) {
+        if (completedDays[i]) {
+          currentStreak++;
+          longestStreak = Math.max(longestStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      }
+
+      // Check for achievements
+      const achievementsToCheck = [
+        { code: 'first_step', condition: dayNumbers.includes(1) },
+        { code: 'streak_3', condition: longestStreak >= 3 },
+        { code: 'streak_7', condition: longestStreak >= 7 },
+        { code: 'streak_14', condition: longestStreak >= 14 },
+        { code: 'month_master', condition: daysCompleted === 30 },
+        { code: 'consistent_15', condition: daysCompleted >= 15 },
+        { code: 'comeback_kid', condition: daysCompleted >= 5 && longestStreak < daysCompleted } // Has gaps but posted 5+ days
+      ];
+
+      for (const achievement of achievementsToCheck) {
+        if (achievement.condition) {
+          // Get achievement ID
+          const [achRows]: any = await db.execute('SELECT id FROM achievements WHERE code = ?', [achievement.code]);
+          if (achRows.length > 0) {
+            const achId = achRows[0].id;
+            // Insert achievement if not already earned
+            try {
+              await db.execute(
+                'INSERT IGNORE INTO user_achievements (user_id, achievement_id, strategy_id, unlocked_at) VALUES (?, ?, ?, NOW())',
+                [userId, achId, strategyId]
+              );
+            } catch (err: any) {
+              // Silently ignore duplicates
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("Warning: Could not check/award achievements:", error.message);
+    }
+  }
+
   app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
     const { completed_days, day_checklist } = req.body;
     try {
@@ -734,6 +850,10 @@ async function startServer() {
         'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
         [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), req.params.id, req.user.id]
       );
+      
+      // Check and award achievements
+      await checkAndAwardAchievements(req.user.id, req.params.id, completed_days);
+      
       res.json({ success: true });
     } catch (error: any) {
       console.error(`[PATCH /progress] Error:`, error.message);
@@ -809,6 +929,34 @@ async function startServer() {
       res.json({ versions });
     } catch (error: any) {
       console.error(`[GET /script-versions] Error:`, error.message);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Endpoint to fetch user's achievements for a strategy
+  app.get(["/api/achievements", "/api/achievements/"], authenticateToken, async (req: any, res) => {
+    try {
+      const db = getPool();
+      const { strategy_id } = req.query;
+      
+      let query = `
+        SELECT a.id, a.code, a.name_en, a.name_es, a.description_en, a.description_es, a.icon, a.tier, ua.unlocked_at
+        FROM achievements a
+        LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = ?
+      `;
+      let params: any[] = [req.user.id];
+      
+      if (strategy_id) {
+        query += ` AND (ua.strategy_id = ? OR ua.strategy_id IS NULL)`;
+        params.push(strategy_id);
+      }
+      
+      query += ` ORDER BY ua.unlocked_at DESC, a.tier DESC, a.id ASC`;
+      
+      const [achievements]: any = await db.execute(query, params);
+      res.json({ achievements });
+    } catch (error: any) {
+      console.error(`[GET /achievements] Error:`, error.message);
       res.status(500).json({ error: "Server error" });
     }
   });

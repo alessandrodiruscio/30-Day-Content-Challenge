@@ -46,10 +46,12 @@ import {
   Pause,
   Volume2,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Trophy,
+  Award
 } from 'lucide-react';
-import { UserProfile, ContentSeries, SeriesConcept, User } from './types';
-import { robustFetch, safeJson } from './utils/api';
+import { UserProfile, ContentSeries, SeriesConcept, User, Achievement } from './types';
+import { robustFetch, safeJson, fetchAchievements } from './utils/api';
 import { jsPDF } from 'jspdf';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1885,6 +1887,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     const hasSeenWizard = localStorage.getItem('wizard_seen_once');
     return !hasSeenWizard;
   });
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [showAchievements, setShowAchievements] = useState<boolean>(false);
 
   const handleWizardComplete = () => {
     localStorage.setItem('wizard_seen_once', 'true');
@@ -1896,6 +1900,21 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
     setDayChecklist(series.day_checklist || {});
     setDayNotes(series.day_notes || {});
   }, [series.id]);
+
+  // Fetch achievements when series changes
+  useEffect(() => {
+    const loadAchievements = async () => {
+      if (token && series.id) {
+        try {
+          const data = await fetchAchievements(token, series.id);
+          setAchievements(data.achievements || []);
+        } catch (error) {
+          console.error('Failed to fetch achievements:', error);
+        }
+      }
+    };
+    loadAchievements();
+  }, [series.id, token]);
 
   const handleNoteChange = (day: number, value: string) => {
     const updatedNotes = { ...dayNotes, [day]: value };
@@ -2275,6 +2294,92 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   return (
     <>
       {showWizard && <StrategyWizard seriesId={series.id} onComplete={handleWizardComplete} />}
+
+      {/* Achievements Modal */}
+      <AnimatePresence>
+        {showAchievements && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowAchievements(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white border-b border-zinc-200 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-display font-bold flex items-center gap-2">
+                  <Trophy className="text-amber-500" size={28} />
+                  Achievements
+                </h2>
+                <button
+                  onClick={() => setShowAchievements(false)}
+                  className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Unlocked Achievements */}
+                {achievements.filter(a => a.unlocked_at).length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
+                      <Award size={16} className="text-amber-500" />
+                      Unlocked ({achievements.filter(a => a.unlocked_at).length})
+                    </h3>
+                    <div className="space-y-3">
+                      {achievements.filter(a => a.unlocked_at).map((ach: Achievement) => (
+                        <div key={ach.id} className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                          <div className="flex items-start gap-3">
+                            <span className="text-4xl flex-shrink-0">{ach.icon}</span>
+                            <div className="flex-1">
+                              <h4 className="font-bold text-amber-900">{ach.name_en}</h4>
+                              <p className="text-sm text-amber-800">{ach.description_en}</p>
+                              {ach.unlocked_at && (
+                                <p className="text-xs text-amber-700 mt-2">
+                                  Unlocked {new Date(ach.unlocked_at).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Locked Achievements */}
+                {achievements.filter(a => !a.unlocked_at).length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-4">
+                      Keep Going ({achievements.filter(a => !a.unlocked_at).length})
+                    </h3>
+                    <div className="space-y-3">
+                      {achievements.filter(a => !a.unlocked_at).map((ach: Achievement) => (
+                        <div key={ach.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl opacity-50">
+                          <div className="flex items-start gap-3">
+                            <span className="text-4xl flex-shrink-0 grayscale">{ach.icon}</span>
+                            <div className="flex-1">
+                              <h4 className="font-bold text-zinc-700">{ach.name_en}</h4>
+                              <p className="text-sm text-zinc-600">{ach.description_en}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12 print:p-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 mb-8 sm:mb-12 print:hidden">
         <button
@@ -2417,6 +2522,36 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               )}
             </div>
           </div>
+
+          {/* Achievements Section */}
+          {achievements.some(a => a.unlocked_at) && (
+            <div className="bg-white rounded-[2rem] border border-zinc-200 p-6">
+              <div className="flex items-center justify-between mb-4 px-2">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                  <Trophy size={16} className="text-amber-500" />
+                  Achievements
+                </h3>
+                <button
+                  onClick={() => setShowAchievements(true)}
+                  className="text-xs font-bold text-brand-primary hover:text-brand-secondary transition-colors"
+                >
+                  View All ({achievements.filter(a => a.unlocked_at).length})
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {achievements.filter(a => a.unlocked_at).slice(0, 4).map((ach: Achievement) => (
+                  <div
+                    key={ach.id}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-sm"
+                    title={ach.description_en}
+                  >
+                    <span className="text-lg">{ach.icon}</span>
+                    <span className="text-xs font-semibold text-amber-900">{ach.name_en}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-[2rem] border border-zinc-200 p-6">
             <div className="flex items-center justify-between mb-6 px-2">
