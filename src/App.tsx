@@ -2854,12 +2854,23 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           <div className="flex items-center justify-between px-4 py-2 bg-brand-primary/10 border-b border-brand-primary/20">
                             <span className="text-xs font-bold text-brand-primary uppercase tracking-widest">Slide 1 — Cover</span>
                             {showStoryboard && (
-                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-brand-primary text-white uppercase tracking-widest">Hook</span>
+                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-brand-primary text-white uppercase tracking-widest">🎣 Hook</span>
                             )}
                           </div>
-                          <div className="p-4 md:p-6">
-                            <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
-                            <p className="text-base md:text-lg font-semibold text-zinc-900 leading-snug">"{displayHook}"</p>
+                          <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
+                              <p className="text-base md:text-lg font-semibold text-zinc-900 leading-snug">"{displayHook}"</p>
+                            </div>
+                            {showStoryboard && (
+                              <div className="md:border-l md:border-brand-primary/20 md:pl-4">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <ImageIcon size={13} className="text-brand-primary" />
+                                  <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                </div>
+                                <p className="text-sm text-zinc-600 italic">Bold title card with hook text overlaid on a colorful or brand-colored background. Use a striking visual or gradient.</p>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -2915,16 +2926,38 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                               <div className={`flex items-center justify-between px-4 py-2 border-b ${showStoryboard ? `${sectionBorders[idx]} bg-white/40` : 'border-zinc-100 bg-zinc-50'}`}>
                                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
                                 {showStoryboard && (
-                                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${sectionTagBgColors[idx]} text-white uppercase tracking-widest`}>
-                                    {sectionLabel.split(' ')[0]}
+                                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${sectionTagBgColors[idx]} text-white uppercase tracking-widest whitespace-nowrap`}>
+                                    {sectionLabel}
                                   </span>
                                 )}
                               </div>
                               
                               {/* Content */}
-                              <div className="p-4 md:p-6">
-                                <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-400'}`}>Copy on screen</p>
-                                <p className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-800'}`}>{paragraph}</p>
+                              <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
+                                <div>
+                                  <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-400'}`}>Copy on screen</p>
+                                  <p className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-800'}`}>{paragraph}</p>
+                                </div>
+                                {showStoryboard && (
+                                  <div className="md:border-l md:border-current/20 md:pl-4">
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      <ImageIcon size={13} className="text-brand-primary" />
+                                      <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                    </div>
+                                    <p className={`text-sm italic ${sectionTextColors[idx]}`}>{imageSuggestion}</p>
+                                    {storyboardForParagraph && (
+                                      <div className="mt-3 p-2 rounded-lg bg-white border-2 border-dashed border-current/20">
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-base flex-shrink-0">🎬</span>
+                                          <div>
+                                            <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
+                                            <p className={`text-xs ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
