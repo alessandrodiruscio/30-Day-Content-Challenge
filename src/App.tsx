@@ -2914,14 +2914,37 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           const sectionBorders = ['border-purple-200', 'border-blue-200', 'border-amber-200', 'border-orange-200', 'border-green-200', 'border-emerald-200'];
                           const sectionTextColors = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900'];
 
-                          return showStoryboard ? (
-                            <div key={idx} className={`rounded-2xl border-2 ${sectionBorders[idx]} bg-gradient-to-br ${sectionColors[idx]} overflow-hidden`}>
-                              <div className={`px-4 py-2 font-bold text-sm ${sectionTextColors[idx]} border-b ${sectionBorders[idx]} bg-white/40`}>
-                                {sectionLabel}
+                          return (
+                            <div key={idx} className={`rounded-2xl border-2 overflow-hidden ${showStoryboard ? `${sectionBorders[idx]} bg-gradient-to-br ${sectionColors[idx]}` : 'border-zinc-200 bg-white'}`}>
+                              {/* Header - shows section label when storyboard is ON */}
+                              <div className={`px-4 py-2 border-b ${showStoryboard ? `${sectionBorders[idx]} bg-white/40 font-bold text-sm ${sectionTextColors[idx]}` : 'border-zinc-100 bg-zinc-50'}`}>
+                                {showStoryboard ? (
+                                  sectionLabel
+                                ) : (
+                                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
+                                )}
                               </div>
-                              <div className="p-4">
-                                <p className={`text-sm md:text-base leading-relaxed ${sectionTextColors[idx]}`}>{paragraph}</p>
-                                {storyboardForParagraph && (
+                              
+                              {/* Content */}
+                              <div className={`${showStoryboard ? 'p-4 space-y-3' : 'p-4 md:p-6'}`}>
+                                <div>
+                                  <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-400'}`}>Copy on screen</p>
+                                  <p className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-800'}`}>{paragraph}</p>
+                                </div>
+                                
+                                {/* Image/Illustration - only shown in storyboard mode */}
+                                {showStoryboard && (
+                                  <div>
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      <ImageIcon size={13} className="text-brand-primary" />
+                                      <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                    </div>
+                                    <p className={`text-sm italic ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-600'}`}>{imageSuggestion}</p>
+                                  </div>
+                                )}
+                                
+                                {/* Creator Action - only shown in storyboard mode */}
+                                {showStoryboard && storyboardForParagraph && (
                                   <div className="mt-3 p-3 rounded-lg bg-white border-2 border-dashed border-current/20">
                                     <div className="flex items-start gap-2">
                                       <span className="text-lg flex-shrink-0">🎬</span>
@@ -2932,16 +2955,6 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                                     </div>
                                   </div>
                                 )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div key={idx} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
-                              <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
-                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
-                              </div>
-                              <div className="p-4 md:p-6">
-                                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
-                                <p className="text-sm md:text-base text-zinc-800 leading-relaxed whitespace-pre-wrap">{shortCopy}</p>
                               </div>
                             </div>
                           );
