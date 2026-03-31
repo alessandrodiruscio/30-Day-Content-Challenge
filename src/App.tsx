@@ -2854,18 +2854,20 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           <div className="flex items-center gap-2 px-4 py-2 bg-brand-primary/10 border-b border-brand-primary/20">
                             <span className="text-xs font-bold text-brand-primary uppercase tracking-widest">Slide 1 — Cover</span>
                           </div>
-                          <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
+                          <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
                             <div>
                               <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
                               <p className="text-base md:text-lg font-semibold text-zinc-900 leading-snug">"{displayHook}"</p>
                             </div>
-                            <div className="md:border-l md:border-brand-primary/20 md:pl-4">
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <ImageIcon size={13} className="text-brand-primary" />
-                                <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                            {showStoryboard && (
+                              <div className="md:border-l md:border-brand-primary/20 md:pl-4">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <ImageIcon size={13} className="text-brand-primary" />
+                                  <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                </div>
+                                <p className="text-sm text-zinc-600 italic">Bold title card with hook text overlaid on a colorful or brand-colored background. Use a striking visual or gradient.</p>
                               </div>
-                              <p className="text-sm text-zinc-600 italic">Bold title card with hook text overlaid on a colorful or brand-colored background. Use a striking visual or gradient.</p>
-                            </div>
+                            )}
                           </div>
                         </div>
 
@@ -2926,7 +2928,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                               </div>
                               
                               {/* Content */}
-                              <div className={`${showStoryboard ? 'p-4 space-y-3' : 'p-4 md:p-6'}`}>
+                              <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
                                 <div>
                                   <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-400'}`}>Copy on screen</p>
                                   <p className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-800'}`}>{paragraph}</p>
@@ -2934,25 +2936,23 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                                 
                                 {/* Image/Illustration - only shown in storyboard mode */}
                                 {showStoryboard && (
-                                  <div>
+                                  <div className="md:border-l md:border-current/20 md:pl-4">
                                     <div className="flex items-center gap-1.5 mb-2">
                                       <ImageIcon size={13} className="text-brand-primary" />
                                       <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
                                     </div>
-                                    <p className={`text-sm italic ${showStoryboard ? `${sectionTextColors[idx]}` : 'text-zinc-600'}`}>{imageSuggestion}</p>
-                                  </div>
-                                )}
-                                
-                                {/* Creator Action - only shown in storyboard mode */}
-                                {showStoryboard && storyboardForParagraph && (
-                                  <div className="mt-3 p-3 rounded-lg bg-white border-2 border-dashed border-current/20">
-                                    <div className="flex items-start gap-2">
-                                      <span className="text-lg flex-shrink-0">🎬</span>
-                                      <div>
-                                        <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
-                                        <p className={`text-sm ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
+                                    <p className={`text-sm italic ${sectionTextColors[idx]}`}>{imageSuggestion}</p>
+                                    {storyboardForParagraph && (
+                                      <div className="mt-3 p-2 rounded-lg bg-white border-2 border-dashed border-current/20">
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-base flex-shrink-0">🎬</span>
+                                          <div>
+                                            <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
+                                            <p className={`text-xs ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
+                                          </div>
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
