@@ -2968,7 +2968,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           <div className={`flex items-center justify-between px-4 py-2 border-b ${showStoryboard ? 'border-zinc-300 bg-white/60' : 'bg-zinc-800 border-zinc-700'}`}>
                             <span className={`text-xs font-bold uppercase tracking-widest ${showStoryboard ? 'text-zinc-600' : 'text-zinc-300'}`}>Last Slide — CTA</span>
                             {showStoryboard && (
-                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-zinc-600 text-white uppercase tracking-widest">✅ Result</span>
+                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-zinc-600 text-white uppercase tracking-widest">📲 Call To Action</span>
                             )}
                           </div>
                           <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
