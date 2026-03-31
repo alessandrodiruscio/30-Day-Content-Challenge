@@ -1479,9 +1479,16 @@ Series: "${concept.title}" — ${concept.theme}
 Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} | Style: ${profile.contentType}
 
 For each of the 30 days provide:
-- 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic)
-- 3 matching full scripts (word-for-word, 80-120 words each). Include 3-4 segments separated by \\n\\n (double newlines). Packed with specific tips, examples, and actionable advice. No filler.
-- Storyboard with creator actions (4-5 actions total, one per script segment). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic] from Descript" or link "Get b-roll at escape9to5.life/descript". Use actual newline characters (\\n) to separate each action, matching the order of script segments (separated by \\n\\n).
+- 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic). Each hook should be 1-2 lines and hook viewers immediately.
+- 3 matching full scripts (word-for-word, 130-160 words each). CRITICAL STRUCTURE—every script MUST follow this exact narrative arc with REAL VALUE in each section:
+  1. HOOK (1-2 sentences): Start with a bold statement or question that makes viewers stop scrolling
+  2. RELATE & SET UP THE PROBLEM (1-2 sentences): Paint the pain point your audience faces right now
+  3. THE TURNING POINT (1 sentence): A specific moment or insight that changed things. Must be concrete, not generic.
+  4. THE STRUGGLE (2-3 sentences): Show the real challenge/effort. Keep it relatable and honest—this builds trust.
+  5. THE BIG LESSON (2-3 sentences): The core insight, principle, or framework they're learning. This must be highly specific and actionable, not a life motto. Include the actual technique, principle, or mindset shift.
+  6. THE RESULT (1-2 sentences): The specific outcome when they apply this lesson. Use numbers, metrics, or observable changes when possible.
+  Each section should be separated by \\n\\n. Pack with specific examples, data, or tactical advice. NO FILLER.
+- Storyboard with creator actions (6 actions total, one per section). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic]". Use actual newline characters (\\n) to separate each action, matching the script sections (separated by \\n\\n).
 - A clear CTA
 - A caption with relevant hashtags
 - 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research
@@ -1494,7 +1501,7 @@ ${languageInstruction}`;
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
-          systemInstruction: `Respond with valid JSON. Generate all 30 days. Scripts: 80-120 words each, 3-4 segments with \\n\\n breaks. Visuals: 3-4 creator actions only (smile, lean, point, nod). No text overlays. ${language === 'es' ? 'Spanish only.' : ''}`,
+          systemInstruction: `Respond with valid JSON. Generate all 30 days. Scripts: 130-160 words each, 6 segments with \\n\\n breaks (HOOK, RELATE/PROBLEM, TURNING POINT, STRUGGLE, BIG LESSON with specific insights, RESULT). THE TURNING POINT and BIG LESSON must contain highly specific, actionable insights—not generic advice. Include actual techniques, frameworks, or data when possible. Visuals: 6 creator actions (one per section). No text overlays. ${language === 'es' ? 'Spanish only.' : ''}`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
