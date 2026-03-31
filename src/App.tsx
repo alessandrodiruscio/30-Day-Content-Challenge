@@ -1947,6 +1947,23 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const saveScriptEdit = async () => {
     if (!editingScript || !token || !series.id) return;
     try {
+      // Count paragraphs in old and new scripts
+      const oldScript = series.days[editingScript.day - 1].scripts[editingScript.hook];
+      const oldParagraphs = oldScript.split('\n\n').filter((p: string) => p.trim()).length;
+      const newParagraphs = editedScriptText.split('\n\n').filter((p: string) => p.trim()).length;
+      
+      // Regenerate storyboard if paragraph count changed
+      let updatedVisuals = currentDay.visuals;
+      if (oldParagraphs !== newParagraphs) {
+        const oldVisuals = currentDay.visuals.split('\n');
+        const newVisuals: string[] = [];
+        for (let i = 0; i < newParagraphs; i++) {
+          // Keep existing creator actions if available, otherwise empty
+          newVisuals.push(oldVisuals[i] || '');
+        }
+        updatedVisuals = newVisuals.join('\n');
+      }
+      
       await robustFetch(`/api/strategies/${series.id}/script`, {
         method: 'PATCH',
         headers: {
@@ -1962,6 +1979,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       // Update local series data
       const updatedSeries = { ...series };
       updatedSeries.days[editingScript.day - 1].scripts[editingScript.hook] = editedScriptText;
+      updatedSeries.days[editingScript.day - 1].visuals = updatedVisuals;
       sessionStorage.setItem('selectedSeries', JSON.stringify(updatedSeries));
       setEditingScript(null);
     } catch (err) {
