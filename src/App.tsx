@@ -2830,21 +2830,19 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                             <span>Carousel</span>
                           </button>
                         </div>
-                        {/* Storyboard toggle — only in reel mode */}
-                        {viewMode === 'reel' && (
-                          <button
-                            onClick={() => setShowStoryboard(!showStoryboard)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all wizard-storyboard",
-                              showStoryboard
-                                ? "bg-brand-primary text-white"
-                                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                            )}
-                          >
-                            <Video size={14} />
-                            <span>{showStoryboard ? t('detail.hideStoryboard') : t('detail.showStoryboard')}</span>
-                          </button>
-                        )}
+                        {/* Storyboard toggle — works for both reel and carousel */}
+                        <button
+                          onClick={() => setShowStoryboard(!showStoryboard)}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all wizard-storyboard",
+                            showStoryboard
+                              ? "bg-brand-primary text-white"
+                              : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                          )}
+                        >
+                          <Video size={14} />
+                          <span>{showStoryboard ? t('detail.hideStoryboard') : t('detail.showStoryboard')}</span>
+                        </button>
                       </div>
                     </div>
 
@@ -2908,8 +2906,35 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
                           const shortCopy = shortenCopy(paragraph);
                           const imageSuggestion = generateImageSuggestion(paragraph);
+                          const storyboardLines = currentDay.visuals.split('\n');
+                          const storyboardForParagraph = storyboardLines[idx];
+                          const sectionLabels = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT'];
+                          const sectionLabel = sectionLabels[idx] || `Section ${idx + 1}`;
+                          const sectionColors = ['from-purple-50 to-purple-100', 'from-blue-50 to-blue-100', 'from-amber-50 to-amber-100', 'from-orange-50 to-orange-100', 'from-green-50 to-green-100', 'from-emerald-50 to-emerald-100'];
+                          const sectionBorders = ['border-purple-200', 'border-blue-200', 'border-amber-200', 'border-orange-200', 'border-green-200', 'border-emerald-200'];
+                          const sectionTextColors = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900'];
 
-                          return (
+                          return showStoryboard ? (
+                            <div key={idx} className={`rounded-2xl border-2 ${sectionBorders[idx]} bg-gradient-to-br ${sectionColors[idx]} overflow-hidden`}>
+                              <div className={`px-4 py-2 font-bold text-sm ${sectionTextColors[idx]} border-b ${sectionBorders[idx]} bg-white/40`}>
+                                {sectionLabel}
+                              </div>
+                              <div className="p-4">
+                                <p className={`text-sm md:text-base leading-relaxed ${sectionTextColors[idx]}`}>{paragraph}</p>
+                                {storyboardForParagraph && (
+                                  <div className="mt-3 p-3 rounded-lg bg-white border-2 border-dashed border-current/20">
+                                    <div className="flex items-start gap-2">
+                                      <span className="text-lg flex-shrink-0">🎬</span>
+                                      <div>
+                                        <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
+                                        <p className={`text-sm ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
                             <div key={idx} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-sm">
                               <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
                                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
