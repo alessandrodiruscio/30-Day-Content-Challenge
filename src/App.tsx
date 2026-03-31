@@ -2964,22 +2964,27 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                         })}
 
                         {/* CTA slide */}
-                        <div className="rounded-2xl border-2 border-zinc-900/20 bg-zinc-900 overflow-hidden">
-                          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border-b border-zinc-700">
-                            <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Last Slide — CTA</span>
+                        <div className={`rounded-2xl border-2 overflow-hidden ${showStoryboard ? 'border-zinc-400/50 bg-zinc-100' : 'border-zinc-900/20 bg-zinc-900'}`}>
+                          <div className={`flex items-center justify-between px-4 py-2 border-b ${showStoryboard ? 'border-zinc-300 bg-white/60' : 'bg-zinc-800 border-zinc-700'}`}>
+                            <span className={`text-xs font-bold uppercase tracking-widest ${showStoryboard ? 'text-zinc-600' : 'text-zinc-300'}`}>Last Slide — CTA</span>
+                            {showStoryboard && (
+                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-zinc-600 text-white uppercase tracking-widest">✅ Result</span>
+                            )}
                           </div>
-                          <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
+                          <div className={`p-4 md:p-6 ${showStoryboard ? 'grid md:grid-cols-2 gap-4' : ''}`}>
                             <div>
-                              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
-                              <p className="text-base md:text-lg font-semibold text-white leading-snug">{currentDay.cta}</p>
+                              <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${showStoryboard ? 'text-zinc-600' : 'text-zinc-400'}`}>Copy on screen</p>
+                              <p className={`text-base md:text-lg font-semibold leading-snug ${showStoryboard ? 'text-zinc-800' : 'text-white'}`}>{currentDay.cta}</p>
                             </div>
-                            <div className="md:border-l md:border-zinc-700 md:pl-4">
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <ImageIcon size={13} className="text-brand-primary" />
-                                <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                            {showStoryboard && (
+                              <div className="md:border-l md:border-zinc-400/30 md:pl-4">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <ImageIcon size={13} className="text-brand-primary" />
+                                  <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
+                                </div>
+                                <p className="text-sm text-zinc-600 italic">Your profile photo or brand logo centered on a solid brand-colored background, with CTA text below.</p>
                               </div>
-                              <p className="text-sm text-zinc-400 italic">Your profile photo or brand logo centered on a solid brand-colored background, with CTA text below.</p>
-                            </div>
+                            )}
                           </div>
                         </div>
                       </div>
