@@ -3046,39 +3046,40 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                             </div>
                             <div className="p-3 md:p-6 rounded-xl md:rounded-2xl bg-zinc-50 border border-zinc-100 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-sans">
                               {showStoryboard ? (
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                   {displayScript.split('\n\n').map((paragraph: string, idx: number) => {
                                     const storyboardLines = currentDay.visuals.split('\n');
                                     const storyboardForParagraph = storyboardLines[idx];
                                     const sectionLabels = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT'];
                                     const sectionLabel = sectionLabels[idx] || `Section ${idx + 1}`;
-                                    const sectionColors = ['from-purple-50 to-purple-100', 'from-blue-50 to-blue-100', 'from-amber-50 to-amber-100', 'from-orange-50 to-orange-100', 'from-green-50 to-green-100', 'from-emerald-50 to-emerald-100'];
-                                    const sectionBorders = ['border-purple-200', 'border-blue-200', 'border-amber-200', 'border-orange-200', 'border-green-200', 'border-emerald-200'];
+                                    const sectionBgColors = ['bg-purple-50', 'bg-blue-50', 'bg-amber-50', 'bg-orange-50', 'bg-green-50', 'bg-emerald-50'];
                                     const sectionTextColors = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900'];
+                                    const sectionTagBgColors = ['bg-purple-500', 'bg-blue-500', 'bg-amber-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500'];
+                                    
                                     return (
-                                      <div key={idx} className={`rounded-2xl border-2 ${sectionBorders[idx]} bg-gradient-to-br ${sectionColors[idx]} overflow-hidden`}>
-                                        {/* Section Header */}
-                                        <div className={`px-4 py-2 font-bold text-sm ${sectionTextColors[idx]} border-b ${sectionBorders[idx]} bg-white/40`}>
-                                          {sectionLabel}
+                                      <div key={idx} className={`p-4 rounded-xl ${sectionBgColors[idx]} border-l-4 ${sectionTextColors[idx].replace('text-', 'border-')}`}>
+                                        {/* Section Tag */}
+                                        <div className="mb-2">
+                                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${sectionTagBgColors[idx]} text-white uppercase tracking-widest`}>
+                                            {sectionLabel}
+                                          </span>
                                         </div>
                                         
                                         {/* Section Content */}
-                                        <div className="p-4">
-                                          <p className={`text-sm md:text-base leading-relaxed ${sectionTextColors[idx]}`}>{paragraph}</p>
-                                          
-                                          {/* Creator Action */}
-                                          {storyboardForParagraph && (
-                                            <div className="mt-3 p-3 rounded-lg bg-white border-2 border-dashed border-current/20">
-                                              <div className="flex items-start gap-2">
-                                                <span className="text-lg flex-shrink-0">🎬</span>
-                                                <div>
-                                                  <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
-                                                  <p className={`text-sm ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
-                                                </div>
+                                        <p className={`text-sm md:text-base leading-relaxed ${sectionTextColors[idx]}`}>{paragraph}</p>
+                                        
+                                        {/* Creator Action */}
+                                        {storyboardForParagraph && (
+                                          <div className="mt-3 p-2 rounded-lg bg-white/60 border-l-2 border-dashed border-current/30">
+                                            <div className="flex items-start gap-2">
+                                              <span className="text-base flex-shrink-0">🎬</span>
+                                              <div className="flex-1">
+                                                <strong className="block text-xs font-bold uppercase tracking-widest mb-1 text-zinc-600">Creator Action</strong>
+                                                <p className={`text-xs leading-relaxed ${sectionTextColors[idx]}`}>{storyboardForParagraph}</p>
                                               </div>
                                             </div>
-                                          )}
-                                        </div>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}
