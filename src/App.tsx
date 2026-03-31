@@ -2939,18 +2939,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                               <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
                                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Slide {idx + 2} — Content</span>
                               </div>
-                              <div className="p-4 md:p-6 grid md:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
-                                  <p className="text-sm md:text-base text-zinc-800 leading-relaxed whitespace-pre-wrap">{shortCopy}</p>
-                                </div>
-                                <div className="md:border-l md:border-zinc-100 md:pl-4">
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <ImageIcon size={13} className="text-brand-primary" />
-                                    <p className="text-xs font-bold uppercase tracking-widest text-brand-primary">Image / Illustration</p>
-                                  </div>
-                                  <p className="text-sm text-zinc-600 italic">{imageSuggestion}</p>
-                                </div>
+                              <div className="p-4 md:p-6">
+                                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Copy on screen</p>
+                                <p className="text-sm md:text-base text-zinc-800 leading-relaxed whitespace-pre-wrap">{shortCopy}</p>
                               </div>
                             </div>
                           );
