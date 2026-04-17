@@ -1379,7 +1379,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
 
   useEffect(() => {
     // Check server status on mount
-    robustFetch('/api/debug/mysql', {}, 0, 1000, 5000)
+    robustFetch('/api/debug/mysql')
       .then(res => safeJson(res))
       .then(data => setServerStatus(data))
       .catch(err => {
@@ -1412,7 +1412,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-No-Retry': '1' },
         body: JSON.stringify({ email, password })
-      }, 0, 1000, mode === 'forgot' ? 8000 : 300000);
+      });
       const data = await safeJson(res);
       if (res.ok) {
         if (mode === 'forgot') {
