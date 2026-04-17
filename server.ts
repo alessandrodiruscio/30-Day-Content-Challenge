@@ -240,6 +240,7 @@ async function initDatabase() {
     console.log("✅ MySQL database initialized successfully.");
   } catch (error) {
     console.error("❌ Failed to initialize MySQL database:", error);
+    console.warn("⚠️ Continuing startup without a live database connection.");
   }
 }
 
@@ -682,7 +683,19 @@ async function startServer() {
       );
       res.json({ user: rows[0] });
     } catch (error) {
-      res.status(500).json({ error: "Server error" });
+      console.error("/api/me fallback:", error);
+      res.json({
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          niche: '',
+          products: '',
+          problems: '',
+          audience: '',
+          tone: 'Professional & Helpful',
+          contentType: 'Suggestions & Advice'
+        }
+      });
     }
   });
 
