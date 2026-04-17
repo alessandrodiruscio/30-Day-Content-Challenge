@@ -332,7 +332,7 @@ export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
-  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState<string | null>(initialResetToken);
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = sessionStorage.getItem('currentProfile');
     if (saved) return JSON.parse(saved);
