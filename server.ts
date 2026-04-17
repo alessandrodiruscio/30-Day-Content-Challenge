@@ -244,6 +244,11 @@ async function initDatabase() {
   }
 }
 
+const isDbUnavailableError = (error: any) => {
+  const message = String(error?.message || "");
+  return error?.code === "ETIMEDOUT" || error?.code === "ECONNREFUSED" || error?.code === "PROTOCOL_CONNECTION_LOST" || message.includes("ETIMEDOUT") || message.includes("ECONNREFUSED");
+};
+
 async function addToActiveCampaign(email: string) {
   const url = process.env.ACTIVECAMPAIGN_URL;
   const apiKey = process.env.ACTIVECAMPAIGN_API_KEY;
@@ -564,6 +569,9 @@ async function startServer() {
       res.json({ success: true, message: "If an account exists, a reset link has been sent." });
     } catch (error: any) {
       console.error("Forgot password error:", error);
+      if (isDbUnavailableError(error)) {
+        return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
+      }
       res.status(500).json({ error: error.message || "Server error" });
     }
   });
@@ -670,6 +678,9 @@ async function startServer() {
       res.json({ success: true });
     } catch (error) {
       console.error("Reset password error:", error);
+      if (isDbUnavailableError(error)) {
+        return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
+      }
       res.status(500).json({ error: "Server error" });
     }
   });
