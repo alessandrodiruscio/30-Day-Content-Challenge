@@ -317,8 +317,8 @@ function Confetti() {
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
-  const initialStep = searchParams.get('step') === 'reset_password' ? 'reset_password' : 'landing';
-  const initialResetToken = searchParams.get('token');
+  const resetStep = searchParams.get('step') === 'reset_password';
+  const initialResetToken = searchParams.get('token') || '';
   const { t, i18n } = useTranslation();
   const toggleLanguage = () => {
     const next = i18n.language === 'en' ? 'es' : 'en';
@@ -332,7 +332,16 @@ export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
-  const [resetToken, setResetToken] = useState<string | null>(initialResetToken);
+  const [resetToken] = useState<string>(initialResetToken);
+  if (resetStep) {
+    return (
+      <ResetPasswordView
+        token={resetToken}
+        onSuccess={() => setStep('auth')}
+        onBack={() => setStep('landing')}
+      />
+    );
+  }
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = sessionStorage.getItem('currentProfile');
     if (saved) return JSON.parse(saved);
