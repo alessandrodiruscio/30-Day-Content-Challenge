@@ -543,6 +543,28 @@ function buildFallbackSeries(concept: any, profile: any, language: string) {
   const labels = isSpanish
     ? ['GANCHO', 'PROBLEMA', 'GIRO', 'LUCHA', 'LECCIÓN', 'RESULTADO']
     : ['HOOK', 'PROBLEM', 'TURNING POINT', 'STRUGGLE', 'BIG LESSON', 'RESULT'];
+  const scripts = Array.from({ length: 30 }, (_, i) => {
+    const day = i + 1;
+    const dayLabel = isSpanish ? `Día ${day}` : `Day ${day}`;
+    const sectionText = isSpanish
+      ? [
+          `${labels[0]}: Empieza con una idea clara que detenga el scroll.`,
+          `${labels[1]}: Explica el problema real que vive ${targetAudience}.`,
+          `${labels[2]}: Muestra el momento en que cambió la forma de verlo.`,
+          `${labels[3]}: Cuenta la parte difícil y lo que costó resolverlo.`,
+          `${labels[4]}: Comparte la lección concreta que sí funciona.`,
+          `${labels[5]}: Termina con el resultado y una invitación directa.`
+        ]
+      : [
+          `${labels[0]}: Start with a clear idea that stops the scroll.`,
+          `${labels[1]}: Explain the real problem ${targetAudience} is facing.`,
+          `${labels[2]}: Show the moment that changed how you saw it.`,
+          `${labels[3]}: Share the hard part and what it took to solve it.`,
+          `${labels[4]}: Give the specific lesson that actually works.`,
+          `${labels[5]}: End with the result and a direct call to action.`
+        ];
+    return sectionText.join('\n\n');
+  });
   return {
     title,
     description,
@@ -558,11 +580,7 @@ function buildFallbackSeries(concept: any, profile: any, language: string) {
           isSpanish ? `El error que comete casi todo el mundo en ${baseTopic}` : `The mistake most people make on ${baseTopic}`,
           isSpanish ? `Cómo mejorar tu contenido en ${baseTopic}` : `How to improve your content on ${baseTopic}`
         ],
-        scripts: [
-          labels.map((label, idx) => `${label}: ${isSpanish ? 'Contenido práctico y específico para tu audiencia.' : 'Practical, specific content for your audience.'}`).join('\n\n'),
-          labels.map((label, idx) => `${label}: ${isSpanish ? 'Una segunda versión con otro ángulo útil.' : 'A second version with a different useful angle.'}`).join('\n\n'),
-          labels.map((label, idx) => `${label}: ${isSpanish ? 'Otra versión con una llamada a la acción clara.' : 'Another version with a clear call to action.'}`).join('\n\n')
-        ],
+        scripts: scripts.slice(0, 3),
         value: isSpanish ? `Valor concreto para el día ${day}` : `Concrete value for day ${day}`,
         cta: isSpanish ? 'Escríbeme para recibir ayuda' : 'Message me for help',
         caption: isSpanish ? `Día ${day} de tu reto de contenido. #contenido #crecimiento` : `Day ${day} of your content challenge. #content #growth`,
