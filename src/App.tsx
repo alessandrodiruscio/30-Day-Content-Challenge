@@ -316,6 +316,9 @@ function Confetti() {
 }
 
 export default function App() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialStep = searchParams.get('step') === 'reset_password' ? 'reset_password' : 'landing';
+  const initialResetToken = searchParams.get('token');
   const { t, i18n } = useTranslation();
   const toggleLanguage = () => {
     const next = i18n.language === 'en' ? 'es' : 'en';
