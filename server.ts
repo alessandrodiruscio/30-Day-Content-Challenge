@@ -1693,9 +1693,6 @@ ${languageInstruction}`;
       res.json(JSON.parse(response.text || "{}"));
     } catch (error: any) {
       console.error("Gemini Error:", error);
-      if (error?.status === 503 || error?.status === 429) {
-        return res.json(buildFallbackSeries(concept, profile, language));
-      }
       res.status(500).json({ error: error.message || "Failed to generate series" });
     }
   });
