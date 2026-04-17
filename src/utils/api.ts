@@ -14,6 +14,9 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
     clearTimeout(timeoutId);
     
     if (!res.ok && res.status >= 500 && retries > 0) {
+      if ((options.headers as Record<string, string> | undefined)?.['X-No-Retry'] === '1') {
+        return res;
+      }
       console.warn(`Retrying ${url} due to server error ${res.status}...`);
       await new Promise(resolve => setTimeout(resolve, backoff));
       return robustFetch(url, options, retries - 1, backoff * 2, timeout);

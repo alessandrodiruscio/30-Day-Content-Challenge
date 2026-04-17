@@ -1408,7 +1408,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
     try {
       const res = await robustFetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-No-Retry': '1' },
         body: JSON.stringify({ email, password })
       });
       const data = await safeJson(res);
