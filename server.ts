@@ -507,6 +507,33 @@ async function generateContentWithRetry(ai: any, params: any, retries = 3, delay
   throw lastError;
 }
 
+function getFallbackOptions(profile: any, language: string) {
+  const niche = profile?.niche || 'your niche';
+  const audience = profile?.audience || 'your audience';
+  const tone = profile?.tone || 'your tone';
+  const isSpanish = language === 'es';
+  return [
+    {
+      title: isSpanish ? `Desafío de ${niche}` : `${niche} Challenge`,
+      description: isSpanish ? `Una serie de 30 días diseñada para ayudar a ${audience} con ideas prácticas y claras.` : `A 30-day series designed to help ${audience} with practical, clear ideas.`,
+      targetAudience: audience,
+      theme: isSpanish ? `Estrategia práctica para ${tone.toLowerCase()}` : `Practical strategy for ${tone.toLowerCase()}`
+    },
+    {
+      title: isSpanish ? `Historias de transformación` : `Transformation Stories`,
+      description: isSpanish ? `Contenido centrado en casos reales, lecciones y cambios visibles.` : `Content focused on real cases, lessons, and visible transformations.`,
+      targetAudience: audience,
+      theme: isSpanish ? `Prueba social y confianza` : `Social proof and trust`
+    },
+    {
+      title: isSpanish ? `Método paso a paso` : `Step-by-Step Method`,
+      description: isSpanish ? `Una serie educativa que enseña el proceso completo de forma simple y accionable.` : `An educational series that teaches the full process in a simple, actionable way.`,
+      targetAudience: audience,
+      theme: isSpanish ? `Educación accionable` : `Actionable education`
+    }
+  ];
+}
+
 async function startServer() {
   console.log("Starting server initialization...");
   await initDatabase();
@@ -1490,6 +1517,9 @@ async function startServer() {
       res.json(JSON.parse(response.text || "[]"));
     } catch (error: any) {
       console.error("Gemini Error:", error);
+      if (error?.status === 503 || error?.status === 429) {
+        return res.json(getFallbackOptions(profile, language));
+      }
       res.status(500).json({ error: error.message || "Failed to generate options" });
     }
   });
@@ -1578,6 +1608,9 @@ ${languageInstruction}`;
       res.json(JSON.parse(response.text || "{}"));
     } catch (error: any) {
       console.error("Gemini Error:", error);
+      if (error?.status === 503 || error?.status === 429) {
+        return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
+      }
       res.status(500).json({ error: error.message || "Failed to generate series" });
     }
   });
