@@ -534,6 +534,56 @@ function getFallbackOptions(profile: any, language: string) {
   ];
 }
 
+function buildFallbackSeries(concept: any, profile: any, language: string) {
+  const isSpanish = language === 'es';
+  const title = concept?.title || (isSpanish ? 'Serie de 30 días' : '30-Day Series');
+  const description = concept?.description || (isSpanish ? 'Una estrategia práctica de contenido de 30 días.' : 'A practical 30-day content strategy.');
+  const targetAudience = concept?.targetAudience || profile?.audience || (isSpanish ? 'tu audiencia' : 'your audience');
+  const theme = concept?.theme || (isSpanish ? 'Estrategia de contenido consistente' : 'Consistent content strategy');
+  const labels = isSpanish
+    ? ['GANCHO', 'PROBLEMA', 'GIRO', 'LUCHA', 'LECCIÓN', 'RESULTADO']
+    : ['HOOK', 'PROBLEM', 'TURNING POINT', 'STRUGGLE', 'BIG LESSON', 'RESULT'];
+  return {
+    title,
+    description,
+    targetAudience,
+    theme,
+    days: Array.from({ length: 30 }, (_, i) => {
+      const day = i + 1;
+      const baseTopic = isSpanish ? `día ${day}` : `day ${day}`;
+      return {
+        day,
+        hooks: [
+          isSpanish ? `¿Por qué ${baseTopic} importa?` : `Why ${baseTopic} matters`,
+          isSpanish ? `El error que comete casi todo el mundo en ${baseTopic}` : `The mistake most people make on ${baseTopic}`,
+          isSpanish ? `Cómo mejorar tu contenido en ${baseTopic}` : `How to improve your content on ${baseTopic}`
+        ],
+        scripts: [
+          labels.map((label, idx) => `${label}: ${isSpanish ? 'Contenido práctico y específico para tu audiencia.' : 'Practical, specific content for your audience.'}`).join('\n\n'),
+          labels.map((label, idx) => `${label}: ${isSpanish ? 'Una segunda versión con otro ángulo útil.' : 'A second version with a different useful angle.'}`).join('\n\n'),
+          labels.map((label, idx) => `${label}: ${isSpanish ? 'Otra versión con una llamada a la acción clara.' : 'Another version with a clear call to action.'}`).join('\n\n')
+        ],
+        value: isSpanish ? `Valor concreto para el día ${day}` : `Concrete value for day ${day}`,
+        cta: isSpanish ? 'Escríbeme para recibir ayuda' : 'Message me for help',
+        caption: isSpanish ? `Día ${day} de tu reto de contenido. #contenido #crecimiento` : `Day ${day} of your content challenge. #content #growth`,
+        visuals: [
+          isSpanish ? 'Muestra energía y señala a cámara.' : 'Show energy and point to the camera.',
+          isSpanish ? 'Inclina la cabeza y explica el problema.' : 'Lean in and explain the problem.',
+          isSpanish ? 'Nod while revealing the turning point.' : 'Nod while revealing the turning point.',
+          isSpanish ? 'Haz una pausa breve y enfatiza la lucha.' : 'Pause briefly and emphasize the struggle.',
+          isSpanish ? 'Explica la lección mirando directo a cámara.' : 'Explain the lesson directly to camera.',
+          isSpanish ? 'Sonríe y cierra con un gesto claro.' : 'Smile and close with a clear gesture.'
+        ].join('\n'),
+        searchTerms: [
+          isSpanish ? `${title} contenido inspiración` : `${title} content inspiration`,
+          isSpanish ? `${theme} ejemplos` : `${theme} examples`,
+          isSpanish ? `creador ${targetAudience} estrategia` : `${targetAudience} creator strategy`
+        ]
+      };
+    })
+  };
+}
+
 async function startServer() {
   console.log("Starting server initialization...");
   await initDatabase();
@@ -1609,7 +1659,7 @@ ${languageInstruction}`;
     } catch (error: any) {
       console.error("Gemini Error:", error);
       if (error?.status === 503 || error?.status === 429) {
-        return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
+        return res.json(buildFallbackSeries(concept, profile, language));
       }
       res.status(500).json({ error: error.message || "Failed to generate series" });
     }
