@@ -515,19 +515,25 @@ function getFallbackOptions(profile: any, language: string) {
   return [
     {
       title: isSpanish ? `Desafío de ${niche}` : `${niche} Challenge`,
-      description: isSpanish ? `Una serie de 30 días diseñada para ayudar a ${audience} con ideas prácticas y claras.` : `A 30-day series designed to help ${audience} with practical, clear ideas.`,
+      description: isSpanish
+        ? `Una serie de 30 días pensada para ayudar a ${audience} a resolver un problema real con ideas prácticas, ejemplos claros y una estructura fácil de seguir. Combina educación, motivación y resultados visibles para mantener la atención durante todo el reto.`
+        : `A 30-day series designed to help ${audience} solve a real problem with practical ideas, clear examples, and an easy-to-follow structure. It blends education, motivation, and visible results to keep attention throughout the entire challenge.`,
       targetAudience: audience,
       theme: isSpanish ? `Estrategia práctica para ${tone.toLowerCase()}` : `Practical strategy for ${tone.toLowerCase()}`
     },
     {
       title: isSpanish ? `Historias de transformación` : `Transformation Stories`,
-      description: isSpanish ? `Contenido centrado en casos reales, lecciones y cambios visibles.` : `Content focused on real cases, lessons, and visible transformations.`,
+      description: isSpanish
+        ? `Contenido centrado en casos reales, aprendizajes concretos y cambios visibles que generan confianza. Ideal para mostrar prueba social, compartir lecciones útiles y conectar con las emociones de ${audience}.`
+        : `Content focused on real cases, concrete lessons, and visible transformations that build trust. Ideal for showing social proof, sharing useful insights, and connecting emotionally with ${audience}.`,
       targetAudience: audience,
       theme: isSpanish ? `Prueba social y confianza` : `Social proof and trust`
     },
     {
       title: isSpanish ? `Método paso a paso` : `Step-by-Step Method`,
-      description: isSpanish ? `Una serie educativa que enseña el proceso completo de forma simple y accionable.` : `An educational series that teaches the full process in a simple, actionable way.`,
+      description: isSpanish
+        ? `Una serie educativa que enseña el proceso completo de forma simple, accionable y muy clara. Cada día desglosa una parte del método para que ${audience} entienda qué hacer, por qué hacerlo y cómo aplicarlo de inmediato.`
+        : `An educational series that teaches the full process in a simple, actionable, and very clear way. Each day breaks down one part of the method so ${audience} knows what to do, why it matters, and how to apply it immediately.`,
       targetAudience: audience,
       theme: isSpanish ? `Educación accionable` : `Actionable education`
     }
