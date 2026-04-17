@@ -1412,7 +1412,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-No-Retry': '1' },
         body: JSON.stringify({ email, password })
-      });
+      }, 0, 1000, mode === 'forgot' ? 30000 : 30000);
       const data = await safeJson(res);
       if (res.ok) {
         if (mode === 'forgot') {
