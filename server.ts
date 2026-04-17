@@ -40,7 +40,6 @@ const getDbConfig = () => ({
 });
 
 let pool: mysql.Pool;
-let dbUnavailable = false;
 
 const getPool = () => {
   if (!pool) {
@@ -242,7 +241,6 @@ async function initDatabase() {
   } catch (error) {
     console.error("❌ Failed to initialize MySQL database:", error);
     console.warn("⚠️ Continuing startup without a live database connection.");
-    dbUnavailable = true;
   }
 }
 
@@ -548,9 +546,6 @@ async function startServer() {
     const { email: rawEmail } = req.body;
     if (!rawEmail) return res.status(400).json({ error: "Email is required" });
     const email = rawEmail.toLowerCase().trim();
-    if (dbUnavailable) {
-      return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
-    }
     
     try {
       const db = getPool();
@@ -662,9 +657,6 @@ async function startServer() {
 
   app.post(["/api/reset-password", "/api/reset-password/"], async (req, res) => {
     const { token, password } = req.body;
-    if (dbUnavailable) {
-      return res.status(503).json({ error: "Service temporarily unavailable. Please wait a moment and try again." });
-    }
     try {
       const db = getPool();
       const [rows]: any = await db.execute(

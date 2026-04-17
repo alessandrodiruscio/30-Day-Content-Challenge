@@ -1371,6 +1371,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -1396,6 +1397,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'forgot') setResetLoading(true);
     setLoading(true);
     setError('');
     setSuccessMessage('');
@@ -1426,6 +1428,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
       setError(`Connection error: ${err.message || 'Please check your internet connection'}`);
     } finally {
       setLoading(false);
+      if (mode === 'forgot') setResetLoading(false);
     }
   };
 
@@ -1552,7 +1555,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
               type="submit"
               className="w-full py-4 bg-brand-secondary text-white rounded-2xl font-semibold text-lg hover:bg-slate-800 transition-all disabled:opacity-50"
             >
-              {loading ? t('auth.processing') : (mode === 'login' ? t('auth.login') : mode === 'register' ? t('auth.register') : t('auth.sendResetLink'))}
+              {(loading || resetLoading) ? t('auth.processing') : (mode === 'login' ? t('auth.login') : mode === 'register' ? t('auth.register') : t('auth.sendResetLink'))}
             </button>
           </form>
         )}
