@@ -516,24 +516,24 @@ function getFallbackOptions(profile: any, language: string) {
     {
       title: isSpanish ? `Desafío de ${niche}` : `${niche} Challenge`,
       description: isSpanish
-        ? `Una serie de 30 días pensada para ayudar a ${audience} a resolver un problema real con ideas prácticas, ejemplos claros y una estructura fácil de seguir. Combina educación, motivación y resultados visibles para mantener la atención durante todo el reto.`
-        : `A 30-day series designed to help ${audience} solve a real problem with practical ideas, clear examples, and an easy-to-follow structure. It blends education, motivation, and visible results to keep attention throughout the entire challenge.`,
+        ? `Una serie de 30 días diseñada para ayudar a ${audience} con ideas prácticas y claras.`
+        : `A 30-day series designed to help ${audience} with practical, clear ideas.`,
       targetAudience: audience,
       theme: isSpanish ? `Estrategia práctica para ${tone.toLowerCase()}` : `Practical strategy for ${tone.toLowerCase()}`
     },
     {
       title: isSpanish ? `Historias de transformación` : `Transformation Stories`,
       description: isSpanish
-        ? `Contenido centrado en casos reales, aprendizajes concretos y cambios visibles que generan confianza. Ideal para mostrar prueba social, compartir lecciones útiles y conectar con las emociones de ${audience}.`
-        : `Content focused on real cases, concrete lessons, and visible transformations that build trust. Ideal for showing social proof, sharing useful insights, and connecting emotionally with ${audience}.`,
+        ? `Contenido centrado en casos reales, lecciones y cambios visibles.`
+        : `Content focused on real cases, lessons, and visible transformations.`,
       targetAudience: audience,
       theme: isSpanish ? `Prueba social y confianza` : `Social proof and trust`
     },
     {
       title: isSpanish ? `Método paso a paso` : `Step-by-Step Method`,
       description: isSpanish
-        ? `Una serie educativa que enseña el proceso completo de forma simple, accionable y muy clara. Cada día desglosa una parte del método para que ${audience} entienda qué hacer, por qué hacerlo y cómo aplicarlo de inmediato.`
-        : `An educational series that teaches the full process in a simple, actionable, and very clear way. Each day breaks down one part of the method so ${audience} knows what to do, why it matters, and how to apply it immediately.`,
+        ? `Una serie educativa que enseña el proceso completo de forma simple y accionable.`
+        : `An educational series that teaches the full process in a simple, actionable way.`,
       targetAudience: audience,
       theme: isSpanish ? `Educación accionable` : `Actionable education`
     }
@@ -579,6 +579,7 @@ function buildFallbackSeries(concept: any, profile: any, language: string) {
     days: Array.from({ length: 30 }, (_, i) => {
       const day = i + 1;
       const baseTopic = isSpanish ? `día ${day}` : `day ${day}`;
+      const dayTheme = concept?.theme || theme;
       return {
         day,
         hooks: [
@@ -586,7 +587,17 @@ function buildFallbackSeries(concept: any, profile: any, language: string) {
           isSpanish ? `El error que comete casi todo el mundo en ${baseTopic}` : `The mistake most people make on ${baseTopic}`,
           isSpanish ? `Cómo mejorar tu contenido en ${baseTopic}` : `How to improve your content on ${baseTopic}`
         ],
-        scripts: scripts.slice(0, 3),
+        scripts: [
+          isSpanish
+            ? `GANCHO: Abre con una verdad concreta sobre ${dayTheme}.\n\nPROBLEMA: Explica el dolor real que siente ${targetAudience}.\n\nGIRO: Cuenta el cambio de perspectiva que lo hizo más claro.\n\nLUCHA: Describe el proceso difícil y lo que costó.\n\nLECCIÓN: Enseña el paso específico que sí funciona.\n\nRESULTADO: Cierra con el beneficio visible y una invitación clara.`
+            : `HOOK: Open with a concrete truth about ${dayTheme}.\n\nPROBLEM: Explain the real pain ${targetAudience} is feeling.\n\nTURNING POINT: Share the shift in perspective that made it clear.\n\nSTRUGGLE: Describe the hard process and what it took.\n\nBIG LESSON: Teach the specific step that actually works.\n\nRESULT: Close with the visible benefit and a clear invitation.`,
+          isSpanish
+            ? `GANCHO: Inicia con una observación fuerte sobre ${dayTheme}.\n\nPROBLEMA: Nombra la frustración principal de ${targetAudience}.\n\nGIRO: Muestra el momento exacto en que cambió todo.\n\nLUCHA: Cuenta el esfuerzo real detrás del resultado.\n\nLECCIÓN: Resume la técnica o marco que genera progreso.\n\nRESULTADO: Termina con el cambio tangible y siguiente paso.`
+            : `HOOK: Start with a strong observation about ${dayTheme}.\n\nPROBLEM: Name the main frustration ${targetAudience} has.\n\nTURNING POINT: Show the exact moment everything changed.\n\nSTRUGGLE: Share the real effort behind the result.\n\nBIG LESSON: Summarize the framework or technique that drives progress.\n\nRESULT: End with the tangible change and next step.`,
+          isSpanish
+            ? `GANCHO: Haz una pregunta que obligue a parar.\n\nPROBLEMA: Describe el obstáculo que frena a ${targetAudience}.\n\nGIRO: Expón la idea que desbloquea el avance.\n\nLUCHA: Reconoce las dudas y errores del camino.\n\nLECCIÓN: Da el consejo práctico que aplicarías hoy.\n\nRESULTADO: Cierra con la transformación esperada.`
+            : `HOOK: Ask a question that forces a pause.\n\nPROBLEM: Describe the obstacle holding ${targetAudience} back.\n\nTURNING POINT: Reveal the idea that unlocks progress.\n\nSTRUGGLE: Acknowledge the doubts and mistakes along the way.\n\nBIG LESSON: Give the practical advice you'd apply today.\n\nRESULT: Close with the transformation to expect.`
+        ],
         value: isSpanish ? `Valor concreto para el día ${day}` : `Concrete value for day ${day}`,
         cta: isSpanish ? 'Escríbeme para recibir ayuda' : 'Message me for help',
         caption: isSpanish ? `Día ${day} de tu reto de contenido. #contenido #crecimiento` : `Day ${day} of your content challenge. #content #growth`,
