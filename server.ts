@@ -491,6 +491,22 @@ function popupCloseHtml(data: object): string {
 </html>`;
 }
 
+async function generateContentWithRetry(ai: any, params: any, retries = 3, delayMs = 1500) {
+  let lastError: any;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (error: any) {
+      lastError = error;
+      const status = error?.status || error?.code;
+      const retryable = status === 503 || status === 429 || error?.message?.includes('high demand') || error?.message?.includes('UNAVAILABLE');
+      if (!retryable || attempt === retries) break;
+      await new Promise(resolve => setTimeout(resolve, delayMs * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function startServer() {
   console.log("Starting server initialization...");
   await initDatabase();
@@ -1449,7 +1465,7 @@ async function startServer() {
 
     try {
       const ai = getAI();
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
@@ -1511,7 +1527,7 @@ ${languageInstruction}`;
 
     try {
       const ai = getAI();
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
