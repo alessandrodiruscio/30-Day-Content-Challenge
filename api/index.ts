@@ -70,13 +70,25 @@ get("/api/health", (req, res) => {
 get("/api/debug/mysql", async (req, res) => {
   try {
     const db = getPool();
-    await db.query('SELECT 1');
-    res.json({ status: "ok", message: "Database connection established successfully." });
+    const [userCount]: any = await db.execute('SELECT COUNT(*) as count FROM users');
+    const [strategyCount]: any = await db.execute('SELECT COUNT(*) as count FROM strategies');
+    
+    res.json({ 
+      status: "connected", 
+      message: "Database connection established successfully.",
+      stats: {
+        users: userCount[0].count,
+        strategies: strategyCount[0].count
+      },
+      config: {
+        host: process.env.DB_HOST === '127.0.0.1' || !process.env.DB_HOST ? 'LOCAL (Private)' : 'EXTERNAL (Public)',
+      }
+    });
   } catch (error: any) {
     console.error("Debug MySQL failed:", error);
     res.status(500).json({ 
       status: "error", 
-      message: `Database Connection Failed: ${error.message || 'Check your credentials and firewall settings.'}` 
+      message: `Database Connection Failed: ${error.message}` 
     });
   }
 });
