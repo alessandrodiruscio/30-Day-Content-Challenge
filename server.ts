@@ -19,6 +19,18 @@ const app = express();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
 
+// 0. Vercel Health Check (Early as possible)
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    message: "Server is alive and healthy",
+    env: process.env.NODE_ENV,
+    vercel: !!process.env.VERCEL,
+    db_configured: !!process.env.DB_HOST,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -185,37 +197,10 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
-// Lazy DB Init Middleware for Vercel
-const ensureDb = async (req: any, res: any, next: any) => {
-  if (!dbInitialized && req.url.startsWith('/api') && !req.url.includes('/api/health')) {
-    try {
-      console.log("Lazy initializing database schema...");
-      await initDb();
-      dbInitialized = true;
-    } catch (err: any) {
-      console.error("Lazy DB initialization failed:", err);
-      // We don't block here, let the handler fail naturally with better error reporting
-    }
-  }
-  next();
-};
-
-app.use(ensureDb);
-
-// Routes (Restoring core logic)
-
-// 1. Auth
-app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    env: process.env.NODE_ENV,
-    vercel: !!process.env.VERCEL,
-    db_configured: !!process.env.DB_HOST 
-  });
-});
-
+// 1. Auth routes
 app.post("/api/register", async (req, res) => {
   try {
+    if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
     const db = getPool();
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -233,6 +218,7 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/login", async (req, res) => {
   try {
+    if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
     const db = getPool();
     const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
