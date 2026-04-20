@@ -451,6 +451,15 @@ app.get("/api/community/membership", authenticateToken, (req, res) => {
   res.json({ isMember: false, discordUrl: "https://discord.gg/mock", trialUrl: "https://mock.com" });
 });
 
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Global Error:", err);
+  res.status(500).json({ 
+    error: err.message || "Internal Server Error",
+    stack: process.env.NODE_ENV === "production" ? undefined : err.stack
+  });
+});
+
 // Export for Vercel
 export default app;
 
