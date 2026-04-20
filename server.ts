@@ -451,6 +451,9 @@ app.get("/api/community/membership", authenticateToken, (req, res) => {
   res.json({ isMember: false, discordUrl: "https://discord.gg/mock", trialUrl: "https://mock.com" });
 });
 
+// Export for Vercel
+export default app;
+
 // Vite Middleware
 async function startServer() {
   await initDb();
@@ -480,9 +483,20 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
+  // Only listen if not running as a Vercel serverless function
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
-startServer();
+// Start if not in Vercel environment (Vercel will import the app and use its own runner)
+if (!process.env.VERCEL) {
+  startServer();
+} else {
+  // On Vercel, we still need to initialize the database schema
+  initDb().catch(err => {
+    console.error("Delayed DB Init failed:", err);
+  });
+}
