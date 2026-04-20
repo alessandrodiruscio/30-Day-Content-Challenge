@@ -10,6 +10,15 @@ dotenv.config();
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
 
+// Allow CORS for preflight (custom headers like X-No-Retry trigger this)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-No-Retry");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
 // Request Logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -20,11 +29,37 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// Helpers for multi-path routing
+const post = (path: string, handler: any) => {
+  app.post(path, handler);
+  if (path.startsWith('/api')) app.post(path.replace('/api', ''), handler);
+};
+
+const get = (path: string, handler: any) => {
+  app.get(path, handler);
+  if (path.startsWith('/api')) app.get(path.replace('/api', ''), handler);
+};
+
+const put = (path: string, handler: any) => {
+  app.put(path, handler);
+  if (path.startsWith('/api')) app.put(path.replace('/api', ''), handler);
+};
+
+const patch = (path: string, handler: any) => {
+  app.patch(path, handler);
+  if (path.startsWith('/api')) app.patch(path.replace('/api', ''), handler);
+};
+
+const del = (path: string, handler: any) => {
+  app.delete(path, handler);
+  if (path.startsWith('/api')) app.delete(path.replace('/api', ''), handler);
+};
+
 // 3. Health Check
-app.get("/api/health", (req, res) => {
+get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
-    message: "Server is alive - Unified Minimal",
+    message: "Server is alive - Multi-path Cors Enabled",
     env: process.env.NODE_ENV,
     vercel: !!process.env.VERCEL,
     db_configured: !!process.env.DB_HOST,
@@ -92,7 +127,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
 };
 
 // 5. Routes
-app.post("/api/register", async (req, res) => {
+post("/api/register", async (req: any, res: any) => {
   try {
     if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
@@ -106,7 +141,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-app.post("/api/login", async (req, res) => {
+post("/api/login", async (req: any, res: any) => {
   try {
     if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
@@ -123,7 +158,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-app.get("/api/me", authenticateToken, async (req: any, res) => {
+get("/api/me", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
     const [rows]: any = await db.execute('SELECT id, email, niche, products, problems, audience, tone, contentType, primaryCTA FROM users WHERE id = ?', [req.user.id]);
@@ -131,7 +166,7 @@ app.get("/api/me", authenticateToken, async (req: any, res) => {
   } catch (error) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
-app.put("/api/profile", authenticateToken, async (req: any, res) => {
+put("/api/profile", authenticateToken, async (req: any, res: any) => {
   try {
     const { niche, products, problems, audience, tone, contentType, primaryCTA } = req.body;
     const db = getPool();
@@ -140,7 +175,7 @@ app.put("/api/profile", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.get("/api/strategies", authenticateToken, async (req: any, res) => {
+get("/api/strategies", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
     const [rows]: any = await db.execute('SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
@@ -154,7 +189,7 @@ app.get("/api/strategies", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.post("/api/strategies", authenticateToken, async (req: any, res) => {
+post("/api/strategies", authenticateToken, async (req: any, res: any) => {
   try {
     const { title, data, start_date } = req.body;
     const db = getPool();
@@ -163,7 +198,7 @@ app.post("/api/strategies", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.patch("/api/strategies/:id", authenticateToken, async (req: any, res) => {
+patch("/api/strategies/:id", authenticateToken, async (req: any, res: any) => {
   try {
     const { title, data, start_date } = req.body;
     const db = getPool();
@@ -172,7 +207,7 @@ app.patch("/api/strategies/:id", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.post("/api/strategies/:id/progress", authenticateToken, async (req: any, res) => {
+post("/api/strategies/:id/progress", authenticateToken, async (req: any, res: any) => {
   try {
     const { completed_days, day_checklist } = req.body;
     const db = getPool();
@@ -181,7 +216,7 @@ app.post("/api/strategies/:id/progress", authenticateToken, async (req: any, res
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.delete("/api/strategies/:id", authenticateToken, async (req: any, res) => {
+del("/api/strategies/:id", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
     await db.execute('DELETE FROM strategies WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
@@ -189,7 +224,7 @@ app.delete("/api/strategies/:id", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.get("/api/achievements", authenticateToken, async (req: any, res) => {
+get("/api/achievements", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
     const strategyId = req.query.strategyId;
@@ -206,12 +241,26 @@ app.get("/api/achievements", authenticateToken, async (req: any, res) => {
 });
 
 // Community mock
-app.get("/api/community/membership", (req, res) => res.json({ isMember: false }));
+get("/api/community/membership", (req: any, res: any) => res.json({ isMember: false }));
 
 // Error handler
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Express Error:", err);
-  res.status(500).json({ error: err.message || "Internal Server Error" });
+  res.status(500).json({ 
+    error: err.message || "Internal Server Error",
+    path: req.url,
+    method: req.method
+  });
+});
+
+// Final catch-all for 404s within the API block
+app.use('/api', (req, res) => {
+  res.status(404).json({ 
+    error: "API Endpoint not found", 
+    path: req.url, 
+    method: req.method,
+    hint: "Check if you're hitting /api/login or just /login"
+  });
 });
 
 // 6. Export for Vercel
