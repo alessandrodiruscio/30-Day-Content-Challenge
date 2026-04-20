@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import mysql from "mysql2/promise";
@@ -7,6 +6,9 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
+
+// Conditional Vite import to avoid crashes in production
+let createViteServer: any = null;
 
 dotenv.config();
 
@@ -21,19 +23,25 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // DB Configuration
-const getDbConfig = () => ({
-  host: process.env.DB_HOST || "MISSING_HOST",
-  user: process.env.DB_USER || "MISSING_USER",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "MISSING_DATABASE",
-  port: parseInt(process.env.DB_PORT || "3306"),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
-  connectTimeout: 30000,
-});
+const getDbConfig = () => {
+  const host = process.env.DB_HOST;
+  if (!host) {
+    console.warn("DB_HOST is missing - database operations will fail");
+  }
+  return {
+    host: host || "127.0.0.1",
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME || "database",
+    port: parseInt(process.env.DB_PORT || "3306"),
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    connectTimeout: 30000,
+  };
+};
 
 let pool: mysql.Pool;
 const getPool = () => {
@@ -456,7 +464,8 @@ app.use((err: any, req: any, res: any, next: any) => {
   console.error("Global Error:", err);
   res.status(500).json({ 
     error: err.message || "Internal Server Error",
-    stack: process.env.NODE_ENV === "production" ? undefined : err.stack
+    stack: err.stack, // Always show stack on Vercel for easier debugging
+    phase: "global_error_handler"
   });
 });
 
@@ -466,7 +475,11 @@ export default app;
 // Vite Middleware
 async function startServer() {
   await initDb();
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    if (!createViteServer) {
+      const viteModule = await import("vite");
+      createViteServer = viteModule.createServer;
+    }
     const vite = await createViteServer({
       server: { middlewareMode: true, allowedHosts: true },
       appType: "spa",
