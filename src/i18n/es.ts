@@ -28,6 +28,7 @@ const es = {
         "¡Publica un Reel por día y observa cómo crece tu autoridad!",
       ],
       startChallenge: "Iniciar Tu Reto",
+      joinChallenge: "Únete al Reto",
       loginToStart: "Inicia Sesión para Comenzar",
       viewStrategies: "Ver Mis Estrategias Guardadas",
       quote: '"La consistencia es el puente entre los objetivos y el logro."',

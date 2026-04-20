@@ -28,6 +28,7 @@ const en = {
         "Post one Reel per day and watch your authority grow!",
       ],
       startChallenge: "Start Your Challenge",
+      joinChallenge: "Join the Challenge",
       loginToStart: "Login to Start",
       viewStrategies: "View My Saved Strategies",
       quote: '"Consistency is the bridge between goals and accomplishment."',

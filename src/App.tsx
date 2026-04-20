@@ -1694,14 +1694,6 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
       <div className="bg-white p-10 rounded-[3rem] border border-surface-container-highest shadow-elegant signature-glow relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-1.5 editorial-gradient" />
         
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-black font-headline tracking-tight text-on-surface mb-2">
-            {mode === 'login' ? t('auth.loginTitle') : mode === 'register' ? t('auth.registerTitle') : t('auth.forgotTitle')}
-          </h2>
-          <p className="text-sm font-body text-on-surface-variant opacity-60">
-            {mode === 'login' ? 'Welcome back to Authority.' : mode === 'register' ? 'Start your content sprint.' : 'We\'ll get you back in.'}
-          </p>
-        </div>
 
         {mode !== 'forgot' && (
           <div className="flex p-1.5 bg-surface-container-low rounded-2xl mb-10 border border-surface-container">
