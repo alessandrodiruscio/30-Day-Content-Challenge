@@ -73,12 +73,22 @@ get("/api/debug/mysql", async (req, res) => {
     const [userCount]: any = await db.execute('SELECT COUNT(*) as count FROM users');
     const [strategyCount]: any = await db.execute('SELECT COUNT(*) as count FROM strategies');
     
+    // Detailed breakdown (limit to first 20 for safety)
+    const [breakdown]: any = await db.execute(`
+      SELECT u.id, u.email, COUNT(s.id) as strategy_count 
+      FROM users u 
+      LEFT JOIN strategies s ON u.id = s.user_id 
+      GROUP BY u.id 
+      LIMIT 20
+    `);
+
     res.json({ 
       status: "connected", 
       message: "Database connection established successfully.",
       stats: {
-        users: userCount[0].count,
-        strategies: strategyCount[0].count
+        total_users: userCount[0].count,
+        total_strategies: strategyCount[0].count,
+        user_breakdown: breakdown
       },
       config: {
         host: process.env.DB_HOST === '127.0.0.1' || !process.env.DB_HOST ? 'LOCAL (Private)' : 'EXTERNAL (Public)',
