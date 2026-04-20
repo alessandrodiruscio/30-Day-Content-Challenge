@@ -9,6 +9,11 @@ dotenv.config();
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
+if (!process.env.JWT_SECRET) {
+  console.warn("[Auth] No JWT_SECRET found in environment. Using default fallback.");
+} else {
+  console.log("[Auth] Custom JWT_SECRET detected.");
+}
 
 // Allow CORS for preflight (custom headers like X-No-Retry trigger this)
 app.use((req, res, next) => {
@@ -30,29 +35,29 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Helpers for multi-path routing
-const post = (path: string, handler: any) => {
-  app.post(path, handler);
-  if (path.startsWith('/api')) app.post(path.replace('/api', ''), handler);
+const post = (path: string, ...handlers: any[]) => {
+  app.post(path, ...handlers);
+  if (path.startsWith('/api')) app.post(path.replace('/api', ''), ...handlers);
 };
 
-const get = (path: string, handler: any) => {
-  app.get(path, handler);
-  if (path.startsWith('/api')) app.get(path.replace('/api', ''), handler);
+const get = (path: string, ...handlers: any[]) => {
+  app.get(path, ...handlers);
+  if (path.startsWith('/api')) app.get(path.replace('/api', ''), ...handlers);
 };
 
-const put = (path: string, handler: any) => {
-  app.put(path, handler);
-  if (path.startsWith('/api')) app.put(path.replace('/api', ''), handler);
+const put = (path: string, ...handlers: any[]) => {
+  app.put(path, ...handlers);
+  if (path.startsWith('/api')) app.put(path.replace('/api', ''), ...handlers);
 };
 
-const patch = (path: string, handler: any) => {
-  app.patch(path, handler);
-  if (path.startsWith('/api')) app.patch(path.replace('/api', ''), handler);
+const patch = (path: string, ...handlers: any[]) => {
+  app.patch(path, ...handlers);
+  if (path.startsWith('/api')) app.patch(path.replace('/api', ''), ...handlers);
 };
 
-const del = (path: string, handler: any) => {
-  app.delete(path, handler);
-  if (path.startsWith('/api')) app.delete(path.replace('/api', ''), handler);
+const del = (path: string, ...handlers: any[]) => {
+  app.delete(path, ...handlers);
+  if (path.startsWith('/api')) app.delete(path.replace('/api', ''), ...handlers);
 };
 
 // 3. Health Check
@@ -203,9 +208,20 @@ post("/api/login", async (req: any, res: any) => {
 get("/api/me", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
+    console.log(`[Profile] Fetching for user ID from token: ${req.user.id}`);
     const [rows]: any = await db.execute('SELECT id, email, niche, products, problems, audience, tone, contentType, primaryCTA FROM users WHERE id = ?', [req.user.id]);
+    
+    if (rows.length === 0) {
+      console.warn(`[Profile] No user found in DB for ID: ${req.user.id}`);
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    console.log(`[Profile] Found user: ${rows[0].email}`);
     res.json({ user: rows[0] });
-  } catch (error) { res.status(500).json({ error: "Fetch failed" }); }
+  } catch (error: any) { 
+    console.error(`[Profile] Fetch failed for ID ${req.user.id}:`, error);
+    res.status(500).json({ error: "Fetch failed" }); 
+  }
 });
 
 put("/api/profile", authenticateToken, async (req: any, res: any) => {
@@ -220,15 +236,29 @@ put("/api/profile", authenticateToken, async (req: any, res: any) => {
 get("/api/strategies", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
+    console.log(`[Strategies] Fetching for user ID: ${req.user.id}, Email: ${req.user.email}`);
+    
     const [rows]: any = await db.execute('SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
-    res.json(rows.map((s: any) => ({
-      id: s.id, title: s.title, data: JSON.parse(s.data), start_date: s.start_date,
+    
+    console.log(`[Strategies] Found ${rows.length} strategies for user ${req.user.id}`);
+    
+    const mapped = rows.map((s: any) => ({
+      id: s.id, 
+      title: s.title, 
+      data: JSON.parse(s.data), 
+      start_date: s.start_date,
       completed_days: JSON.parse(s.completed_days || '[]'),
       day_checklist: JSON.parse(s.day_checklist || '{}'),
       day_notes: JSON.parse(s.day_notes || '{}'),
-      created_at: s.created_at
-    })));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+      created_at: s.created_at,
+      debug_user_id: req.user.id // Add this for frontend debugging
+    }));
+
+    res.json(mapped);
+  } catch (error: any) { 
+    console.error(`[Strategies] Error fetching for user ${req.user.id}:`, error);
+    res.status(500).json({ error: error.message }); 
+  }
 });
 
 post("/api/strategies", authenticateToken, async (req: any, res: any) => {

@@ -628,22 +628,29 @@ export default function App() {
   };
 
   const fetchMyStrategies = async () => {
-    if (!token) return;
+    if (!token) {
+      console.log("[fetchMyStrategies] No token, aborting");
+      return;
+    }
     try {
+      console.log("[fetchMyStrategies] Fetching strategies...");
       const res = await robustFetch('/api/strategies', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await safeJson(res);
+        console.log("[fetchMyStrategies] Data received:", data);
         setSavedStrategies(data);
-        if (data.length > 0) {
+        if (data && data.length > 0) {
           setStep('my_strategies');
         } else {
           setStep('form');
         }
+      } else {
+        console.error("[fetchMyStrategies] Fetch failed with status:", res.status);
       }
     } catch (err) {
-      console.error("Failed to fetch strategies:", err);
+      console.error("[fetchMyStrategies] Failed to fetch strategies:", err);
     }
   };
 
@@ -870,12 +877,18 @@ export default function App() {
                 })
                 .then(res => safeJson(res))
                 .then(data => {
+                  console.log("[App] Strategies fetched:", data);
                   setSavedStrategies(data);
-                  if (data.length > 0) setStep('my_strategies');
-                  else setStep('form');
+                  if (data && data.length > 0) {
+                    console.log("[App] Found strategies, switching to my_strategies step");
+                    setStep('my_strategies');
+                  } else {
+                    console.log("[App] No strategies found, switching to form step");
+                    setStep('form');
+                  }
                 })
                 .catch(err => {
-                  console.error("Failed to fetch initial strategies:", err);
+                  console.error("[App] Failed to fetch initial strategies:", err);
                   setStep('form');
                 });
               }} 
