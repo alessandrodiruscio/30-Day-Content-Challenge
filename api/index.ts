@@ -1,29 +1,30 @@
 import express from "express";
-import path from "path";
-import fs from "fs";
 import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import { fileURLToPath } from 'url';
 
-// Conditional Vite import to avoid crashes in production
-let createViteServer: any = null;
-
+// 1. Load environment variables
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
-const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
 
-// 0. Vercel Health Check (Early as possible)
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// 2. Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// 3. Health Check
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
-    message: "Server is alive and healthy - All-in-one bundle",
+    message: "Server is alive - Unified Minimal",
     env: process.env.NODE_ENV,
     vercel: !!process.env.VERCEL,
     db_configured: !!process.env.DB_HOST,
@@ -31,26 +32,15 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// DB Configuration
+// 4. DB Configuration
 const getDbConfig = () => {
   const host = process.env.DB_HOST;
-  if (!host && process.env.VERCEL) {
-    console.error("CRITICAL: DB_HOST environment variable is missing for Vercel deployment.");
-  }
   return {
     host: host || "127.0.0.1",
     user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD || "",
     database: process.env.DB_NAME || "database",
     port: parseInt(process.env.DB_PORT || "3306"),
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
     connectTimeout: 5000, 
   };
 };
@@ -62,7 +52,7 @@ const getPool = () => {
   if (!pool) {
     const config = getDbConfig();
     if ((!process.env.DB_HOST || config.host === "127.0.0.1") && process.env.VERCEL) {
-      throw new Error("DATABASE_CONFIG_ERROR: No DB_HOST provided. Set up DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in Vercel.");
+      throw new Error("DATABASE_CONFIG_ERROR: No DB_HOST provided.");
     }
     pool = mysql.createPool(config);
   }
@@ -70,40 +60,23 @@ const getPool = () => {
 };
 
 const initDb = async () => {
-  try {
-    const db = getPool();
-    await db.execute(`CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL, niche VARCHAR(255), products TEXT, problems TEXT, audience TEXT, tone VARCHAR(255), contentType VARCHAR(255), primaryCTA TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
-    await db.execute(`CREATE TABLE IF NOT EXISTS strategies (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(255) NOT NULL, data LONGTEXT NOT NULL, start_date VARCHAR(255), completed_days TEXT, day_checklist TEXT, day_notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
-    try { await db.execute('ALTER TABLE strategies MODIFY COLUMN data LONGTEXT NOT NULL'); } catch (e) {}
-    try { await db.execute('ALTER TABLE strategies MODIFY COLUMN day_notes LONGTEXT'); } catch (e) {}
-    try { await db.execute('ALTER TABLE strategies MODIFY COLUMN day_checklist LONGTEXT'); } catch (e) {}
-    await db.execute(`CREATE TABLE IF NOT EXISTS achievements (id INT AUTO_INCREMENT PRIMARY KEY, code VARCHAR(255) UNIQUE NOT NULL, name_en VARCHAR(255) NOT NULL, name_es VARCHAR(255) NOT NULL, description_en TEXT NOT NULL, description_es TEXT NOT NULL, icon VARCHAR(255) NOT NULL, tier VARCHAR(50) NOT NULL)`);
-    await db.execute(`CREATE TABLE IF NOT EXISTS user_achievements (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, achievement_id INT NOT NULL, strategy_id INT, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY user_ach_at (user_id, achievement_id, strategy_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE, FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE)`);
-    const [rows]: any = await db.execute('SELECT COUNT(*) as count FROM achievements');
-    if (rows[0].count === 0) {
-      const initialAchievements = [
-        ['FIRST_STRATEGY', 'Strategic Visionary', 'Visionario Estratégico', 'Created your first 30-day challenge.', 'Creó su primer desafío de 30 días.', 'Target', 'bronze'],
-        ['WEEK_ONE', 'Week One Warrior', 'Guerrero de la Primera Semana', 'Completed 7 days of content.', 'Completó 7 días de contenido.', 'Zap', 'silver'],
-        ['HALF_WAY', 'Consistent Creator', 'Creador Consistente', 'Completed 15 days of content.', 'Completó 15 días de contenido.', 'Calendar', 'gold'],
-        ['COMPLETED', 'Challenge Master', 'Maestro del Desafío', 'Completed the full 30-day challenge!', '¡Completó el desafío completo de 30 días!', 'Trophy', 'platinum']
-      ];
-      for (const ach of initialAchievements) {
-        await db.execute('INSERT INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) VALUES (?, ?, ?, ?, ?, ?, ?)', ach);
-      }
-    }
-    const columns = [
-      'ALTER TABLE users ADD COLUMN niche VARCHAR(255)',
-      'ALTER TABLE users ADD COLUMN products TEXT',
-      'ALTER TABLE users ADD COLUMN problems TEXT',
-      'ALTER TABLE users ADD COLUMN audience TEXT',
-      'ALTER TABLE users ADD COLUMN tone VARCHAR(255)',
-      'ALTER TABLE users ADD COLUMN contentType VARCHAR(255)',
-      'ALTER TABLE users ADD COLUMN primaryCTA TEXT'
+  const db = getPool();
+  await db.execute(`CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL, niche VARCHAR(255), products TEXT, problems TEXT, audience TEXT, tone VARCHAR(255), contentType VARCHAR(255), primaryCTA TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS strategies (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(255) NOT NULL, data LONGTEXT NOT NULL, start_date VARCHAR(255), completed_days TEXT, day_checklist TEXT, day_notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
+  try { await db.execute('ALTER TABLE strategies MODIFY COLUMN data LONGTEXT NOT NULL'); } catch (e) {}
+  await db.execute(`CREATE TABLE IF NOT EXISTS achievements (id INT AUTO_INCREMENT PRIMARY KEY, code VARCHAR(255) UNIQUE NOT NULL, name_en VARCHAR(255) NOT NULL, name_es VARCHAR(255) NOT NULL, description_en TEXT NOT NULL, description_es TEXT NOT NULL, icon VARCHAR(255) NOT NULL, tier VARCHAR(50) NOT NULL)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS user_achievements (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, achievement_id INT NOT NULL, strategy_id INT, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY user_ach_at (user_id, achievement_id, strategy_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE, FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE)`);
+  const [rows]: any = await db.execute('SELECT COUNT(*) as count FROM achievements');
+  if (rows[0].count === 0) {
+    const initialAchievements = [
+      ['FIRST_STRATEGY', 'Strategic Visionary', 'Visionario Estratégico', 'First challenge.', 'Primer desafío.', 'Target', 'bronze'],
+      ['WEEK_ONE', 'Week One Warrior', 'Guerrero de la Primera Semana', '7 days.', '7 días.', 'Zap', 'silver'],
+      ['HALF_WAY', 'Consistent Creator', 'Creador Consistente', '15 days.', '15 días.', 'Calendar', 'gold'],
+      ['COMPLETED', 'Challenge Master', 'Maestro del Desafío', '30 days.', '30 días.', 'Trophy', 'platinum']
     ];
-    for (const sql of columns) { try { await db.execute(sql); } catch (e) {} }
-    console.log("Database schema verified.");
-  } catch (err) {
-    console.error("Database initialization failed:", err);
+    for (const ach of initialAchievements) {
+      await db.execute('INSERT INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) VALUES (?, ?, ?, ?, ?, ?, ?)', ach);
+    }
   }
 };
 
@@ -118,6 +91,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+// 5. Routes
 app.post("/api/register", async (req, res) => {
   try {
     if (!dbInitialized) { await initDb(); dbInitialized = true; }
@@ -128,7 +102,7 @@ app.post("/api/register", async (req, res) => {
     const token = jwt.sign({ id: result.insertId, email }, JWT_SECRET);
     res.json({ token, user: { id: result.insertId, email } });
   } catch (error: any) {
-    res.status(400).json({ error: "User already exists or database error" });
+    res.status(400).json({ error: error.message || "Register failed" });
   }
 });
 
@@ -145,35 +119,25 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET);
     res.json({ token, user: { id: user.id, email: user.email } });
   } catch (error: any) {
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: error.message || "Login failed" });
   }
 });
-
-app.post("/api/forgot-password", (req, res) => res.json({ message: "Reset link sent" }));
-app.post("/api/reset-password", (req, res) => res.json({ message: "Password updated" }));
 
 app.get("/api/me", authenticateToken, async (req: any, res) => {
   try {
     const db = getPool();
     const [rows]: any = await db.execute('SELECT id, email, niche, products, problems, audience, tone, contentType, primaryCTA FROM users WHERE id = ?', [req.user.id]);
     res.json({ user: rows[0] });
-  } catch (error) {
-    res.status(500).json({ error: "Fetch failed" });
-  }
+  } catch (error) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
 app.put("/api/profile", authenticateToken, async (req: any, res) => {
   try {
     const { niche, products, problems, audience, tone, contentType, primaryCTA } = req.body;
     const db = getPool();
-    await db.execute(
-      'UPDATE users SET niche=?, products=?, problems=?, audience=?, tone=?, contentType=?, primaryCTA=? WHERE id=?',
-      [niche || null, products || null, problems || null, audience || null, tone || null, contentType || null, primaryCTA || null, req.user.id]
-    );
+    await db.execute('UPDATE users SET niche=?, products=?, problems=?, audience=?, tone=?, contentType=?, primaryCTA=? WHERE id=?', [niche || null, products || null, problems || null, audience || null, tone || null, contentType || null, primaryCTA || null, req.user.id]);
     res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
 app.get("/api/strategies", authenticateToken, async (req: any, res) => {
@@ -181,36 +145,12 @@ app.get("/api/strategies", authenticateToken, async (req: any, res) => {
     const db = getPool();
     const [rows]: any = await db.execute('SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
     res.json(rows.map((s: any) => ({
-      id: s.id,
-      title: s.title,
-      data: JSON.parse(s.data),
-      start_date: s.start_date,
+      id: s.id, title: s.title, data: JSON.parse(s.data), start_date: s.start_date,
       completed_days: JSON.parse(s.completed_days || '[]'),
       day_checklist: JSON.parse(s.day_checklist || '{}'),
       day_notes: JSON.parse(s.day_notes || '{}'),
       created_at: s.created_at
     })));
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get("/api/strategies/:id", authenticateToken, async (req: any, res) => {
-  try {
-    const db = getPool();
-    const [rows]: any = await db.execute('SELECT * FROM strategies WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
-    const s = rows[0];
-    res.json({
-      id: s.id,
-      title: s.title,
-      data: JSON.parse(s.data),
-      start_date: s.start_date,
-      completed_days: JSON.parse(s.completed_days || '[]'),
-      day_checklist: JSON.parse(s.day_checklist || '{}'),
-      day_notes: JSON.parse(s.day_notes || '{}'),
-      created_at: s.created_at
-    });
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
@@ -241,15 +181,6 @@ app.post("/api/strategies/:id/progress", authenticateToken, async (req: any, res
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.post("/api/strategies/:id/notes", authenticateToken, async (req: any, res) => {
-  try {
-    const { day_notes } = req.body;
-    const db = getPool();
-    await db.execute('UPDATE strategies SET day_notes = ? WHERE id = ? AND user_id = ?', [JSON.stringify(day_notes), req.params.id, req.user.id]);
-    res.json({ success: true });
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
-});
-
 app.delete("/api/strategies/:id", authenticateToken, async (req: any, res) => {
   try {
     const db = getPool();
@@ -274,40 +205,14 @@ app.get("/api/achievements", authenticateToken, async (req: any, res) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
-app.get("/api/community/membership", authenticateToken, (req, res) => {
-  res.json({ isMember: false, discordUrl: "https://discord.gg/mock", trialUrl: "https://mock.com" });
-});
+// Community mock
+app.get("/api/community/membership", (req, res) => res.json({ isMember: false }));
 
+// Error handler
 app.use((err: any, req: any, res: any, next: any) => {
-  console.error("Global Error:", err);
-  res.status(500).json({ error: err.message || "Internal Server Error", stack: err.stack });
+  console.error("Express Error:", err);
+  res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
-// Vercel Entry Point
-export default async function handler(req: any, res: any) {
-  return app(req, res);
-}
-
-// Local Server
-if (!process.env.VERCEL) {
-  const startLocal = async () => {
-    await initDb();
-    if (process.env.NODE_ENV !== "production") {
-      const viteModule = await import("vite");
-      const vt = await viteModule.createServer({ server: { middlewareMode: true, allowedHosts: true }, appType: "spa" });
-      app.use(vt.middlewares);
-      app.use('*', async (req, res) => {
-        try {
-          let template = fs.readFileSync(path.resolve("index.html"), "utf-8");
-          template = await vt.transformIndexHtml(req.originalUrl, template);
-          res.status(200).set({ "Content-Type": "text/html" }).end(template);
-        } catch (e: any) { res.status(500).end(e.stack); }
-      });
-    } else {
-      app.use(express.static(path.resolve("dist")));
-      app.get("*", (req, res) => res.sendFile(path.resolve("dist/index.html")));
-    }
-    app.listen(PORT, "0.0.0.0", () => console.log(`Local dev server: http://localhost:${PORT}`));
-  };
-  startLocal();
-}
+// 6. Export for Vercel
+export default app;
