@@ -1,6 +1,6 @@
 const en = {
   translation: {
-    appName: "30-Day Content Challenge",
+    appName: "The 30-Day Content Challenge",
     back: "Back",
 
     // Header / Nav
@@ -16,7 +16,7 @@ const en = {
 
     // Landing
     landing: {
-      badge: "30-Day Content Challenge",
+      badge: "The 30-Day Content Challenge",
       heading1: "Turn Your Expertise Into",
       heading2: "30 Viral Reels",
       description: "Stop staring at a blank screen. Tell us about your business, and we'll craft a cohesive, 30-day content series with full scripts and visual storyboards. Perfect for your next Instagram challenge.",
@@ -122,6 +122,11 @@ const en = {
           "Empathetic & Soft",
         ],
       },
+      primaryCTA: {
+        label: "What is your Primary Call to Action?",
+        placeholder: "e.g. Subscribe to my newsletter, Book a discovery call, Buy my meal plan",
+        tooltip: "This will be the single goal for the entire 30-day challenge. The AI will strategically lead your audience to this specific action every day.",
+      },
       startDate: {
         label: "When do you want to start the challenge?",
         tooltip: "We'll use this to date your 30-day calendar.",
@@ -147,6 +152,10 @@ const en = {
       empty: "No strategies saved yet. Start your first challenge!",
       createFirst: "Create Your First Strategy",
       deleteConfirm: "Are you sure you want to delete this strategy?",
+      deleteTitle: "Delete Strategy?",
+      deleteDescription: "Are you sure you want to remove this 30-day strategy? This action cannot be undone and you will lose all progress tracking for this challenge.",
+      cancel: "Cancel",
+      deleteNow: "Delete Now",
       deleteFailed: "Failed to delete strategy",
     },
 

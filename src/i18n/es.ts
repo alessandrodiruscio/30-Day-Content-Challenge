@@ -1,6 +1,6 @@
 const es = {
   translation: {
-    appName: "Reto de Contenido 30 Días",
+    appName: "The 30-Day Content Challenge",
     back: "Atrás",
 
     // Header / Nav
@@ -16,7 +16,7 @@ const es = {
 
     // Landing
     landing: {
-      badge: "Reto de Contenido 30 Días",
+      badge: "The 30-Day Content Challenge",
       heading1: "Convierte Tu Experiencia En",
       heading2: "30 Reels Virales",
       description: "Deja de mirar una pantalla en blanco. Cuéntanos sobre tu negocio y crearemos una serie de contenido cohesiva de 30 días con guiones completos y guiones visuales. Perfecto para tu próximo reto de Instagram.",
@@ -147,6 +147,10 @@ const es = {
       empty: "Aún no hay estrategias guardadas. ¡Comienza tu primer reto!",
       createFirst: "Crear Tu Primera Estrategia",
       deleteConfirm: "¿Estás seguro de que deseas eliminar esta estrategia?",
+      deleteTitle: "¿Eliminar Estrategia?",
+      deleteDescription: "¿Estás seguro de que deseas eliminar esta estrategia de 30 días? Esta acción no se puede deshacer y perderás todo el seguimiento del progreso de este reto.",
+      cancel: "Cancelar",
+      deleteNow: "Eliminar Ahora",
       deleteFailed: "Error al eliminar la estrategia",
     },
 

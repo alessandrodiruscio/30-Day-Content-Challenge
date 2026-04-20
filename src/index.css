@@ -1,17 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Playfair Display", serif;
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-display: "Plus Jakarta Sans", sans-serif;
   
-  --color-brand-primary: #660EBE; /* Alessandro's Purple */
-  --color-brand-secondary: #2E0766; /* Deep Purple */
-  --color-brand-accent: #A855F7; /* Lighter Purple */
+  /* Kinetic Authority Color Palette */
+  --color-primary: #6366f1; /* Indigo 500 */
+  --color-primary-container: #4f46e5; /* Indigo 600 */
+  --color-on-primary: #ffffff;
+  
+  --color-secondary: #4338ca; /* Indigo 700 */
+  --color-secondary-container: #3730a3; /* Indigo 800 */
+  --color-on-secondary: #ffffff;
+  
+  --color-surface-bright: #fbf8fc;
+  --color-surface-container: #f0edf1;
+  --color-surface-container-low: #f6f2f7;
+  --color-surface-container-high: #eae7eb;
+  --color-surface-container-highest: #e4e1e6;
+  
+  --color-on-surface: #1b1b1e;
+  --color-on-surface-variant: #4a4455;
+  
+  --color-brand-primary: var(--color-primary);
+  --color-brand-secondary: var(--color-secondary);
+  
+  --shadow-signature: 0 32px 64px -12px rgba(83, 0, 183, 0.06);
+  --shadow-elegant: 0 10px 15px -3px rgb(0 0 0 / 0.03), 0 4px 6px -4px rgb(0 0 0 / 0.03);
+  --shadow-prestige: 0 20px 25px -5px rgb(0 0 0 / 0.04), 0 8px 10px -6px rgb(0 0 0 / 0.04);
 }
 
 @layer base {
   body {
-    @apply bg-white text-slate-900 font-sans antialiased;
+    @apply bg-surface-bright text-on-surface font-sans antialiased selection:bg-primary/20 selection:text-primary;
   }
+}
+
+.editorial-gradient {
+  background: linear-gradient(135deg, #5300b7 0%, #6d28d9 100%);
+}
+
+.signature-glow {
+  box-shadow: var(--shadow-signature);
+}
+
+.glass-morphism {
+  @apply bg-white/80 backdrop-blur-xl border border-white/20;
+}
+
+.card-prestige {
+  @apply bg-white rounded-3xl border border-surface-container-highest shadow-elegant transition-all duration-500 hover:shadow-signature hover:-translate-y-1 hover:border-primary/20;
 }

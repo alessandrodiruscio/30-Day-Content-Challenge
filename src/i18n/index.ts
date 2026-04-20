@@ -14,6 +14,7 @@ i18n
     },
     lng: savedLang,
     fallbackLng: 'en',
+    returnObjects: true,
     interpolation: {
       escapeValue: false,
     },

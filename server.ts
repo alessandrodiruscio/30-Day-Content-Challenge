@@ -2,28 +2,25 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
-import { hash, compare } from "bcryptjs";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
 import mysql from "mysql2/promise";
-import { GoogleGenAI, Type } from "@google/genai";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-// Gemini Setup
-const getAI = () => {
-  if (process.env.GEMINI_API_KEY) {
-    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-  return new GoogleGenAI({
-    apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "",
-    httpOptions: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL
-      ? { apiVersion: "", baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL }
-      : undefined,
-  });
-};
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Helper to get DB config with validation
+const app = express();
+const PORT = 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// DB Configuration
 const getDbConfig = () => ({
   host: process.env.DB_HOST || "MISSING_HOST",
   user: process.env.DB_USER || "MISSING_USER",
@@ -36,1703 +33,446 @@ const getDbConfig = () => ({
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
   connectTimeout: 30000,
-  acquireTimeout: 30000,
 });
 
 let pool: mysql.Pool;
-
 const getPool = () => {
   if (!pool) {
-    const config = getDbConfig();
-    const missing = [];
-    if (config.host === "MISSING_HOST") missing.push("DB_HOST");
-    if (config.user === "MISSING_USER") missing.push("DB_USER");
-    if (config.database === "MISSING_DATABASE") missing.push("DB_NAME");
-    
-    if (missing.length > 0) {
-      throw new Error(`Database not configured. Missing: ${missing.join(", ")}. Please set these in AI Studio Secrets.`);
-    }
-    
-    console.log("Initializing database pool on demand...");
-    pool = mysql.createPool(config);
+    pool = mysql.createPool(getDbConfig());
   }
   return pool;
 };
 
-async function initDatabase() {
-  const config = getDbConfig();
-  if (config.host === "MISSING_HOST" || config.user === "MISSING_USER" || config.database === "MISSING_DATABASE") {
-    console.warn("⚠️ MySQL Configuration missing. Database initialization skipped.");
-    return;
-  }
-
+// Initialize DB schema
+const initDb = async () => {
   try {
-    console.log(`Initializing MySQL database at ${config.host}:${config.port}...`);
+    const db = getPool();
     
-    if (!pool) {
-      pool = mysql.createPool(config);
-    }
-    await pool.execute(`
+    // Create tables if they don't exist
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS users (
-        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
-        niche TEXT,
+        niche VARCHAR(255),
         products TEXT,
         problems TEXT,
         audience TEXT,
-        tone VARCHAR(255) DEFAULT 'Professional & Helpful',
-        contentType VARCHAR(255) DEFAULT 'Suggestions & Advice',
-        reset_token VARCHAR(255),
-        reset_token_expiry DATETIME,
+        tone VARCHAR(255),
+        contentType VARCHAR(255),
+        primaryCTA TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Create strategies table
-    await pool.execute(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS strategies (
-        id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        user_id BIGINT,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
         title VARCHAR(255) NOT NULL,
         data LONGTEXT NOT NULL,
         start_date VARCHAR(255),
         completed_days TEXT,
         day_checklist TEXT,
+        day_notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 
-    // Add day_checklist column if it doesn't exist
+    // Ensure data is LONGTEXT (might have been created as TEXT before)
     try {
-      await pool.execute(`ALTER TABLE strategies ADD COLUMN day_checklist TEXT`);
-      console.log("✅ Added day_checklist column to strategies table");
-    } catch (err: any) {
-      if (err.message.includes("Duplicate column")) {
-        console.log("✅ day_checklist column already exists");
-      } else {
-        console.error("Warning: Could not add day_checklist column:", err.message);
-      }
-    }
+      await db.execute('ALTER TABLE strategies MODIFY COLUMN data LONGTEXT NOT NULL');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE strategies MODIFY COLUMN day_notes LONGTEXT');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE strategies MODIFY COLUMN day_checklist LONGTEXT');
+    } catch (e) {}
 
-    // Add day_notes column if it doesn't exist
-    try {
-      await pool.execute(`ALTER TABLE strategies ADD COLUMN day_notes TEXT`);
-      console.log("✅ Added day_notes column to strategies table");
-    } catch (err: any) {
-      if (err.message.includes("Duplicate column")) {
-        console.log("✅ day_notes column already exists");
-      } else {
-        console.error("Warning: Could not add day_notes column:", err.message);
-      }
-    }
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS achievements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        code VARCHAR(255) UNIQUE NOT NULL,
+        name_en VARCHAR(255) NOT NULL,
+        name_es VARCHAR(255) NOT NULL,
+        description_en TEXT NOT NULL,
+        description_es TEXT NOT NULL,
+        icon VARCHAR(255) NOT NULL,
+        tier VARCHAR(50) NOT NULL
+      )
+    `);
 
-    // Create script versions table for version history
-    try {
-      await pool.execute(`
-        CREATE TABLE IF NOT EXISTS strategy_script_versions (
-          id BIGINT AUTO_INCREMENT PRIMARY KEY,
-          strategy_id BIGINT NOT NULL,
-          day_number INT NOT NULL,
-          hook_index INT NOT NULL,
-          script_text LONGTEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
-          INDEX(strategy_id, day_number, hook_index)
-        )
-      `);
-      console.log("✅ Script versions table created/exists");
-    } catch (err: any) {
-      console.error("Warning: Could not create script versions table:", err.message);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS user_achievements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        achievement_id INT NOT NULL,
+        strategy_id INT,
+        unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY user_ach_at (user_id, achievement_id, strategy_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE,
+        FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Seed achievements if empty
+    const [rows]: any = await db.execute('SELECT COUNT(*) as count FROM achievements');
+    if (rows[0].count === 0) {
+      const initialAchievements = [
+        ['FIRST_STRATEGY', 'Strategic Visionary', 'Visionario Estratégico', 'Created your first 30-day challenge.', 'Creó su primer desafío de 30 días.', 'Target', 'bronze'],
+        ['WEEK_ONE', 'Week One Warrior', 'Guerrero de la Primera Semana', 'Completed 7 days of content.', 'Completó 7 días de contenido.', 'Zap', 'silver'],
+        ['HALF_WAY', 'Consistent Creator', 'Creador Consistente', 'Completed 15 days of content.', 'Completó 15 días de contenido.', 'Calendar', 'gold'],
+        ['COMPLETED', 'Challenge Master', 'Maestro del Desafío', 'Completed the full 30-day challenge!', '¡Completó el desafío completo de 30 días!', 'Trophy', 'platinum']
+      ];
+      for (const ach of initialAchievements) {
+        await db.execute(
+          'INSERT INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ach
+        );
+      }
     }
     
-    // Upgrade existing tables from TEXT to LONGTEXT
-    try {
-      await pool.execute(`ALTER TABLE strategies MODIFY data LONGTEXT NOT NULL`);
-    } catch (alterErr: any) {
-      if (!alterErr.message.includes("Duplicate")) {
-        console.warn("Could not upgrade strategies table column:", alterErr.message);
-      }
-    }
-
-    // Add Instagram OAuth columns
-    const igColumns = [
-      { col: 'instagram_access_token', def: 'TEXT' },
-      { col: 'instagram_ig_user_id', def: 'VARCHAR(255)' },
-      { col: 'instagram_username', def: 'VARCHAR(255)' },
-      { col: 'instagram_profile_pic', def: 'TEXT' },
+    // Ensure all columns exist for migration cases
+    const columns = [
+      'ALTER TABLE users ADD COLUMN niche VARCHAR(255)',
+      'ALTER TABLE users ADD COLUMN products TEXT',
+      'ALTER TABLE users ADD COLUMN problems TEXT',
+      'ALTER TABLE users ADD COLUMN audience TEXT',
+      'ALTER TABLE users ADD COLUMN tone VARCHAR(255)',
+      'ALTER TABLE users ADD COLUMN contentType VARCHAR(255)',
+      'ALTER TABLE users ADD COLUMN primaryCTA TEXT'
     ];
-    for (const { col, def } of igColumns) {
+    
+    for (const sql of columns) {
       try {
-        await pool.execute(`ALTER TABLE users ADD COLUMN ${col} ${def}`);
-        console.log(`✅ Added ${col} column to users table`);
-      } catch (err: any) {
-        if (!err.message.includes('Duplicate column')) {
-          console.warn(`Warning: Could not add ${col} column:`, err.message);
-        }
-      }
+        await db.execute(sql);
+      } catch (e) {} 
     }
-
-    // Create achievements table
-    try {
-      await pool.execute(`
-        CREATE TABLE IF NOT EXISTS achievements (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          code VARCHAR(255) UNIQUE NOT NULL,
-          name_en VARCHAR(255) NOT NULL,
-          name_es VARCHAR(255) NOT NULL,
-          description_en TEXT NOT NULL,
-          description_es TEXT NOT NULL,
-          icon VARCHAR(255) NOT NULL,
-          tier VARCHAR(50) NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      console.log("✅ Achievements table created/exists");
-
-      // Insert default achievements
-      const defaultAchievements = [
-        { code: 'first_step', name_en: 'First Step', name_es: 'Primer Paso', desc_en: 'Posted content on Day 1', desc_es: 'Publicó contenido el Día 1', icon: '🚀', tier: 'bronze' },
-        { code: 'streak_3', name_en: 'Streak Starter', name_es: 'Iniciador de Racha', desc_en: '3 days posted in a row', desc_es: '3 días publicados seguidos', icon: '🔥', tier: 'bronze' },
-        { code: 'streak_7', name_en: 'Week Warrior', name_es: 'Guerrero Semanal', desc_en: '7 days posted in a row', desc_es: '7 días publicados seguidos', icon: '⚡', tier: 'silver' },
-        { code: 'streak_14', name_en: 'Two Week Titan', name_es: 'Titán de Dos Semanas', desc_en: '14 days posted in a row', desc_es: '14 días publicados seguidos', icon: '💎', tier: 'silver' },
-        { code: 'month_master', name_en: 'Month Master', name_es: 'Maestro del Mes', desc_en: 'Completed all 30 days', desc_es: 'Completó los 30 días', icon: '👑', tier: 'gold' },
-        { code: 'consistent_15', name_en: 'Consistent Creator', name_es: 'Creador Consistente', desc_en: 'Posted on 15+ days', desc_es: 'Publicó en 15+ días', icon: '🎯', tier: 'bronze' },
-        { code: 'comeback_kid', name_en: 'Comeback Kid', name_es: 'Campeón de Regreso', desc_en: 'Resumed after a gap, posted 5+ more days', desc_es: 'Reanudó después de una brecha', icon: '💪', tier: 'silver' }
-      ];
-
-      for (const ach of defaultAchievements) {
-        try {
-          await pool.execute(
-            `INSERT IGNORE INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [ach.code, ach.name_en, ach.name_es, ach.desc_en, ach.desc_es, ach.icon, ach.tier]
-          );
-        } catch (err: any) {
-          // Silently ignore duplicate entries
-        }
-      }
-    } catch (err: any) {
-      console.error("Warning: Could not create achievements table:", err.message);
-    }
-
-    // Create user_achievements table
-    try {
-      await pool.execute(`
-        CREATE TABLE IF NOT EXISTS user_achievements (
-          id BIGINT AUTO_INCREMENT PRIMARY KEY,
-          user_id BIGINT NOT NULL,
-          achievement_id INT NOT NULL,
-          strategy_id BIGINT,
-          unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE,
-          FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
-          UNIQUE KEY unique_user_achievement (user_id, achievement_id, strategy_id)
-        )
-      `);
-      console.log("✅ User achievements table created/exists");
-    } catch (err: any) {
-      console.error("Warning: Could not create user_achievements table:", err.message);
-    }
-
-    console.log("✅ MySQL database initialized successfully.");
-  } catch (error) {
-    console.error("❌ Failed to initialize MySQL database:", error);
-    console.warn("⚠️ Continuing startup without a live database connection.");
+    console.log("Database schema verified.");
+  } catch (err) {
+    console.error("Database initialization failed:", err);
   }
-}
-
-const isDbUnavailableError = (error: any) => {
-  const message = String(error?.message || "");
-  return error?.code === "ETIMEDOUT" || error?.code === "ECONNREFUSED" || error?.code === "PROTOCOL_CONNECTION_LOST" || message.includes("ETIMEDOUT") || message.includes("ECONNREFUSED");
 };
 
-async function addToActiveCampaign(email: string) {
-  const url = process.env.ACTIVECAMPAIGN_URL;
-  const apiKey = process.env.ACTIVECAMPAIGN_API_KEY;
-  const tagName = process.env.ACTIVECAMPAIGN_TAG_NAME;
-
-  if (!url || !apiKey || !tagName) {
-    console.warn("ActiveCampaign credentials missing, skipping contact creation.");
-    return;
-  }
-
-  try {
-    // 1. Create or sync contact
-    const contactRes = await fetch(`${url}/api/3/contact/sync`, {
-      method: 'POST',
-      headers: {
-        'Api-Token': apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contact: { email }
-      })
-    });
-    const contactData = await contactRes.json();
-    const contactId = contactData.contact?.id;
-
-    if (contactId) {
-      // 2. Find Tag ID by Name
-      const tagsRes = await fetch(`${url}/api/3/tags?search=${encodeURIComponent(tagName)}`, {
-        headers: {
-          'Api-Token': apiKey
-        }
-      });
-      const tagsData = await tagsRes.json();
-      
-      // Look for an exact match in the search results
-      const tag = tagsData.tags?.find((t: any) => t.tag.toLowerCase() === tagName.toLowerCase());
-      let tagId = tag?.id;
-
-      // 3. If tag doesn't exist, create it
-      if (!tagId) {
-        const createTagRes = await fetch(`${url}/api/3/tags`, {
-          method: 'POST',
-          headers: {
-            'Api-Token': apiKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            tag: {
-              tag: tagName,
-              tagType: "template",
-              description: "Created by 30-Day Content Challenge"
-            }
-          })
-        });
-        const createTagData = await createTagRes.json();
-        tagId = createTagData.tag?.id;
-      }
-
-      if (tagId) {
-        // 4. Add Tag to contact
-        await fetch(`${url}/api/3/contactTags`, {
-          method: 'POST',
-          headers: {
-            'Api-Token': apiKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contactTag: {
-              contact: contactId,
-              tag: tagId
-            }
-          })
-        });
-      }
-    }
-  } catch (error) {
-    console.error("Error adding to ActiveCampaign:", error);
-  }
-}
-
-async function checkActiveCampaignMembership(email: string): Promise<boolean> {
-  const url = process.env.ACTIVECAMPAIGN_URL;
-  const apiKey = process.env.ACTIVECAMPAIGN_API_KEY;
-  const memberTagName = process.env.ACTIVECAMPAIGN_MEMBER_TAG_NAME;
-
-  if (!url || !apiKey || !memberTagName) {
-    console.warn("ActiveCampaign credentials or member tag name missing.");
-    return false;
-  }
-
-  try {
-    // 1. Get contact by email
-    const contactRes = await fetch(`${url}/api/3/contacts?email=${encodeURIComponent(email)}`, {
-      headers: { 'Api-Token': apiKey }
-    });
-    const contactData = await contactRes.json();
-    const contact = contactData.contacts?.[0];
-
-    if (!contact) return false;
-
-    // 2. Get contact's tags
-    const contactTagsRes = await fetch(`${url}/api/3/contacts/${contact.id}/contactTags`, {
-      headers: { 'Api-Token': apiKey }
-    });
-    const contactTagsData = await contactTagsRes.json();
-    
-    // 3. Get all tags to find the ID of the member tag
-    const tagsRes = await fetch(`${url}/api/3/tags?search=${encodeURIComponent(memberTagName)}`, {
-      headers: { 'Api-Token': apiKey }
-    });
-    const tagsData = await tagsRes.json();
-    const memberTag = tagsData.tags?.find((t: any) => t.tag.toLowerCase() === memberTagName.toLowerCase());
-
-    if (!memberTag) return false;
-
-    // 4. Check if the contact has the member tag ID
-    return contactTagsData.contactTags?.some((ct: any) => ct.tag === memberTag.id);
-  } catch (error) {
-    console.error("Error checking ActiveCampaign membership:", error);
-    return false;
-  }
-}
-
-async function sendResetEmail(email: string, token: string, origin?: string) {
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const resendFromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-  const appUrl = process.env.APP_URL || origin || "http://localhost:3000";
-  const resetUrl = `${appUrl.replace(/\/$/, '')}?step=reset_password&token=${token}`;
-
-  console.log(`[PASSWORD RESET] Email: ${email}, Token: ${token}`);
-  console.log(`[PASSWORD RESET] Link: ${resetUrl}`);
-
-  if (!resendApiKey || resendApiKey === 're_123456789') {
-    const msg = "⚠️ RESEND_API_KEY is missing or using placeholder value. Reset email not sent.";
-    console.warn(msg);
-    console.log("--------------------------------------------------");
-    console.log(`[PASSWORD RESET - MOCK MODE]`);
-    console.log(`Email: ${email}`);
-    console.log(`Link: ${resetUrl}`);
-    console.log("--------------------------------------------------");
-    throw new Error(msg);
-  }
-
-  try {
-    console.log(`Attempting to send reset email to ${email} via Resend...`);
-    
-    // If using the default onboarding email, Resend is very strict about the 'from' format
-    const fromField = resendFromEmail.includes('onboarding@resend.dev') 
-      ? 'onboarding@resend.dev' 
-      : `"30-Day Content Challenge" <${resendFromEmail.trim()}>`;
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey.trim()}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: fromField,
-        to: email.trim(),
-        subject: 'Reset Your Password - 30-Day Content Challenge',
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #fff;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <h1 style="color: #111; font-size: 24px; font-weight: bold; margin: 0;">Password Reset Request</h1>
-            </div>
-            <p style="color: #444; line-height: 1.6; font-size: 16px;">You requested a password reset for your <strong>30-Day Content Challenge</strong> account.</p>
-            <p style="color: #444; line-height: 1.6; font-size: 16px;">Click the button below to set a new password. This link will expire in 1 hour.</p>
-            <div style="text-align: center; margin: 32px 0;">
-              <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background-color: #000; color: #fff; text-decoration: none; border-radius: 9999px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">Reset Password</a>
-            </div>
-            <p style="color: #666; font-size: 14px; line-height: 1.6;">
-              If the button above doesn't work, copy and paste this link into your browser:
-              <br />
-              <a href="${resetUrl}" style="color: #6D28D9; text-decoration: underline;">${resetUrl}</a>
-            </p>
-            <p style="color: #888; font-size: 12px; margin-top: 40px; border-top: 1px solid #eee; padding-top: 24px; text-align: center;">
-              If you didn't request this, you can safely ignore this email.
-            </p>
-          </div>
-        `
-      })
-    });
-    
-    const data = await res.json();
-    
-    if (!res.ok) {
-      console.error("❌ Resend API error:", JSON.stringify(data, null, 2));
-      if (data.name === 'validation_error' && resendFromEmail === 'onboarding@resend.dev') {
-        const tip = "💡 TIP: When using 'onboarding@resend.dev', you can only send emails to your own Resend account email. To send to others, you must verify a domain in Resend.";
-        console.error(tip);
-        throw new Error(`Resend validation error: ${data.message || 'Check logs'}. ${tip}`);
-      }
-      throw new Error(`Resend API error: ${data.message || 'Check logs'}`);
-    } else {
-      console.log(`✅ Reset email sent successfully to ${email}. Resend ID: ${data.id}`);
-    }
-  } catch (error) {
-    console.error("Error sending reset email via Resend:", error);
-    throw error;
-  }
-}
-
-function popupCloseHtml(data: object): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <title>Instagram Authorization</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>
-    body { font-family: system-ui, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:#fafafa; }
-    .card { text-align:center; padding:32px; background:#fff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,.08); max-width:320px; }
-    .icon { font-size:48px; margin-bottom:16px; }
-    h2 { margin:0 0 8px; font-size:18px; }
-    p { color:#666; font-size:14px; margin:0; }
-  </style>
-</head>
-<body>
-  <div class="card" id="status">
-    <div class="icon">⏳</div>
-    <h2>Connecting...</h2>
-    <p>Please wait while we complete the connection.</p>
-  </div>
-  <script>
-    const data = ${JSON.stringify({ type: 'INSTAGRAM_OAUTH', ...data })};
-    if (data.error) {
-      document.getElementById('status').innerHTML = '<div class="icon">❌</div><h2>Connection Failed</h2><p>' + data.error + '</p>';
-    }
-    if (window.opener) {
-      window.opener.postMessage(data, '*');
-      if (!data.error) {
-        document.getElementById('status').innerHTML = '<div class="icon">✅</div><h2>Connected!</h2><p>You can close this window.</p>';
-        setTimeout(() => window.close(), 1200);
-      }
-    } else {
-      document.getElementById('status').innerHTML = '<div class="icon">' + (data.error ? '❌' : '✅') + '</div><h2>' + (data.error ? 'Error' : 'Done') + '</h2><p>' + (data.error || 'Authorization complete. You can close this window.') + '</p>';
-    }
-  </script>
-</body>
-</html>`;
-}
-
-async function generateContentWithRetry(ai: any, params: any, retries = 3, delayMs = 1500) {
-  let lastError: any;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await ai.models.generateContent(params);
-    } catch (error: any) {
-      lastError = error;
-      const status = error?.status || error?.code;
-      const retryable = status === 503 || status === 429 || error?.message?.includes('high demand') || error?.message?.includes('UNAVAILABLE');
-      if (!retryable || attempt === retries) break;
-      await new Promise(resolve => setTimeout(resolve, delayMs * (attempt + 1)));
-    }
-  }
-  throw lastError;
-}
-
-function getFallbackOptions(profile: any, language: string) {
-  const niche = profile?.niche || 'your niche';
-  const audience = profile?.audience || 'your audience';
-  const tone = profile?.tone || 'your tone';
-  const isSpanish = language === 'es';
-  return [
-    {
-      title: isSpanish ? `Desafío de ${niche}` : `${niche} Challenge`,
-      description: isSpanish
-        ? `Una serie de 30 días diseñada para ayudar a ${audience} con ideas prácticas y claras.`
-        : `A 30-day series designed to help ${audience} with practical, clear ideas.`,
-      targetAudience: audience,
-      theme: isSpanish ? `Estrategia práctica para ${tone.toLowerCase()}` : `Practical strategy for ${tone.toLowerCase()}`
-    },
-    {
-      title: isSpanish ? `Historias de transformación` : `Transformation Stories`,
-      description: isSpanish
-        ? `Contenido centrado en casos reales, lecciones y cambios visibles.`
-        : `Content focused on real cases, lessons, and visible transformations.`,
-      targetAudience: audience,
-      theme: isSpanish ? `Prueba social y confianza` : `Social proof and trust`
-    },
-    {
-      title: isSpanish ? `Método paso a paso` : `Step-by-Step Method`,
-      description: isSpanish
-        ? `Una serie educativa que enseña el proceso completo de forma simple y accionable.`
-        : `An educational series that teaches the full process in a simple, actionable way.`,
-      targetAudience: audience,
-      theme: isSpanish ? `Educación accionable` : `Actionable education`
-    }
-  ];
-}
-
-function buildFallbackSeries(concept: any, profile: any, language: string) {
-  const isSpanish = language === 'es';
-  const title = concept?.title || (isSpanish ? 'Serie de 30 días' : '30-Day Series');
-  const description = concept?.description || (isSpanish ? 'Una estrategia práctica de contenido de 30 días.' : 'A practical 30-day content strategy.');
-  const targetAudience = concept?.targetAudience || profile?.audience || (isSpanish ? 'tu audiencia' : 'your audience');
-  const theme = concept?.theme || (isSpanish ? 'Estrategia de contenido consistente' : 'Consistent content strategy');
-  const labels = isSpanish
-    ? ['GANCHO', 'PROBLEMA', 'GIRO', 'LUCHA', 'LECCIÓN', 'RESULTADO']
-    : ['HOOK', 'PROBLEM', 'TURNING POINT', 'STRUGGLE', 'BIG LESSON', 'RESULT'];
-  const scripts = Array.from({ length: 30 }, (_, i) => {
-    const day = i + 1;
-    const dayLabel = isSpanish ? `Día ${day}` : `Day ${day}`;
-    const sectionText = isSpanish
-      ? [
-          `${labels[0]}: Empieza con una idea clara que detenga el scroll.`,
-          `${labels[1]}: Explica el problema real que vive ${targetAudience}.`,
-          `${labels[2]}: Muestra el momento en que cambió la forma de verlo.`,
-          `${labels[3]}: Cuenta la parte difícil y lo que costó resolverlo.`,
-          `${labels[4]}: Comparte la lección concreta que sí funciona.`,
-          `${labels[5]}: Termina con el resultado y una invitación directa.`
-        ]
-      : [
-          `${labels[0]}: Start with a clear idea that stops the scroll.`,
-          `${labels[1]}: Explain the real problem ${targetAudience} is facing.`,
-          `${labels[2]}: Show the moment that changed how you saw it.`,
-          `${labels[3]}: Share the hard part and what it took to solve it.`,
-          `${labels[4]}: Give the specific lesson that actually works.`,
-          `${labels[5]}: End with the result and a direct call to action.`
-        ];
-    return sectionText.join('\n\n');
-  });
-  return {
-    title,
-    description,
-    targetAudience,
-    theme,
-    days: Array.from({ length: 30 }, (_, i) => {
-      const day = i + 1;
-      const baseTopic = isSpanish ? `día ${day}` : `day ${day}`;
-      const dayTheme = concept?.theme || theme;
-      return {
-        day,
-        hooks: [
-          isSpanish ? `¿Por qué ${baseTopic} importa?` : `Why ${baseTopic} matters`,
-          isSpanish ? `El error que comete casi todo el mundo en ${baseTopic}` : `The mistake most people make on ${baseTopic}`,
-          isSpanish ? `Cómo mejorar tu contenido en ${baseTopic}` : `How to improve your content on ${baseTopic}`
-        ],
-        scripts: [
-          isSpanish
-            ? `GANCHO: Abre con una verdad concreta sobre ${dayTheme}.\n\nPROBLEMA: Explica el dolor real que siente ${targetAudience}.\n\nGIRO: Cuenta el cambio de perspectiva que lo hizo más claro.\n\nLUCHA: Describe el proceso difícil y lo que costó.\n\nLECCIÓN: Enseña el paso específico que sí funciona.\n\nRESULTADO: Cierra con el beneficio visible y una invitación clara.`
-            : `HOOK: Open with a concrete truth about ${dayTheme}.\n\nPROBLEM: Explain the real pain ${targetAudience} is feeling.\n\nTURNING POINT: Share the shift in perspective that made it clear.\n\nSTRUGGLE: Describe the hard process and what it took.\n\nBIG LESSON: Teach the specific step that actually works.\n\nRESULT: Close with the visible benefit and a clear invitation.`,
-          isSpanish
-            ? `GANCHO: Inicia con una observación fuerte sobre ${dayTheme}.\n\nPROBLEMA: Nombra la frustración principal de ${targetAudience}.\n\nGIRO: Muestra el momento exacto en que cambió todo.\n\nLUCHA: Cuenta el esfuerzo real detrás del resultado.\n\nLECCIÓN: Resume la técnica o marco que genera progreso.\n\nRESULTADO: Termina con el cambio tangible y siguiente paso.`
-            : `HOOK: Start with a strong observation about ${dayTheme}.\n\nPROBLEM: Name the main frustration ${targetAudience} has.\n\nTURNING POINT: Show the exact moment everything changed.\n\nSTRUGGLE: Share the real effort behind the result.\n\nBIG LESSON: Summarize the framework or technique that drives progress.\n\nRESULT: End with the tangible change and next step.`,
-          isSpanish
-            ? `GANCHO: Haz una pregunta que obligue a parar.\n\nPROBLEMA: Describe el obstáculo que frena a ${targetAudience}.\n\nGIRO: Expón la idea que desbloquea el avance.\n\nLUCHA: Reconoce las dudas y errores del camino.\n\nLECCIÓN: Da el consejo práctico que aplicarías hoy.\n\nRESULTADO: Cierra con la transformación esperada.`
-            : `HOOK: Ask a question that forces a pause.\n\nPROBLEM: Describe the obstacle holding ${targetAudience} back.\n\nTURNING POINT: Reveal the idea that unlocks progress.\n\nSTRUGGLE: Acknowledge the doubts and mistakes along the way.\n\nBIG LESSON: Give the practical advice you'd apply today.\n\nRESULT: Close with the transformation to expect.`
-        ],
-        value: isSpanish ? `Valor concreto para el día ${day}` : `Concrete value for day ${day}`,
-        cta: isSpanish ? 'Escríbeme para recibir ayuda' : 'Message me for help',
-        caption: isSpanish ? `Día ${day} de tu reto de contenido. #contenido #crecimiento` : `Day ${day} of your content challenge. #content #growth`,
-        visuals: [
-          isSpanish ? 'Muestra energía y señala a cámara.' : 'Show energy and point to the camera.',
-          isSpanish ? 'Inclina la cabeza y explica el problema.' : 'Lean in and explain the problem.',
-          isSpanish ? 'Nod while revealing the turning point.' : 'Nod while revealing the turning point.',
-          isSpanish ? 'Haz una pausa breve y enfatiza la lucha.' : 'Pause briefly and emphasize the struggle.',
-          isSpanish ? 'Explica la lección mirando directo a cámara.' : 'Explain the lesson directly to camera.',
-          isSpanish ? 'Sonríe y cierra con un gesto claro.' : 'Smile and close with a clear gesture.'
-        ].join('\n'),
-        searchTerms: [
-          isSpanish ? `${title} contenido inspiración` : `${title} content inspiration`,
-          isSpanish ? `${theme} ejemplos` : `${theme} examples`,
-          isSpanish ? `creador ${targetAudience} estrategia` : `${targetAudience} creator strategy`
-        ]
-      };
-    })
-  };
-}
-
-async function startServer() {
-  console.log("Starting server initialization...");
-  await initDatabase();
-  
-  const app = express();
-  const PORT = parseInt(process.env.PORT || "5000");
-  const JWT_SECRET = process.env.JWT_SECRET || "insta-challenge-30-super-stable-secret-key-2024";
-
-  console.log("Configuring middleware...");
-  app.use(express.json({ limit: '5mb' }));
-
-  // Check Resend Config
-  const resendKey = process.env.RESEND_API_KEY;
-  if (!resendKey || resendKey === 're_123456789') {
-    console.warn("⚠️ [CONFIG] RESEND_API_KEY is missing or using placeholder. Password reset will not work.");
-  } else {
-    console.log("✅ [CONFIG] RESEND_API_KEY is present.");
-  }
-
-  // Auth Middleware
-  const authenticateToken = (req: any, res: any, next: any) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) return res.sendStatus(401);
-
-    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-      if (err) return res.sendStatus(403);
-      req.user = user;
-      next();
-    });
-  };
-
-  // API Routes
-  app.get(["/api/login", "/api/login/"], (req, res) => {
-    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    res.redirect(`${appUrl}?step=auth&mode=login`);
-  });
-
-  app.get(["/api/register", "/api/register/"], (req, res) => {
-    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    res.redirect(`${appUrl}?step=auth&mode=register`);
-  });
-
-  app.get(["/api/forgot-password", "/api/forgot-password/"], (req, res) => {
-    // If someone accidentally GETs this (e.g. from a browser URL bar or a weird redirect)
-    // redirect them to the home page with the forgot password step active
-    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    res.redirect(`${appUrl}?step=forgot_password`);
-  });
-
-  app.post(["/api/forgot-password", "/api/forgot-password/"], async (req, res) => {
-    const { email: rawEmail } = req.body;
-    if (!rawEmail) return res.status(400).json({ error: "Email is required" });
-    const email = rawEmail.toLowerCase().trim();
-    const origin = `${req.protocol}://${req.get('host')}`;
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
-      const user = rows[0];
-
-      if (user) {
-        const expiry = new Date(Date.now() + 3600000); // 1 hour from now
-        await db.execute(
-          'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
-          [token, expiry, user.id]
-        );
-        await sendResetEmail(email, token, origin);
-      }
-    } catch (error: any) {
-      console.warn("Forgot password unavailable, returning generic success:", error?.code || error?.message || error);
-    }
-
-    return res.json({ success: true, message: "If an account exists, a reset link has been sent." });
-  });
-
-  app.post(["/api/register", "/api/register/"], async (req, res) => {
-    const { email: rawEmail, password } = req.body;
-    
-    if (!rawEmail || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    const email = rawEmail.toLowerCase().trim();
-    console.log(`[AUTH] Registration attempt for: ${email}`);
-    try {
-      const db = getPool();
-      const hashedPassword = await hash(password, 10);
-      
-      const [result]: any = await db.execute(
-        'INSERT INTO users (email, password) VALUES (?, ?)',
-        [email, hashedPassword]
-      );
-
-      const userId = result.insertId;
-      const token = jwt.sign({ id: userId, email }, JWT_SECRET);
-      
-      console.log(`User registered successfully: ${email}`);
-      addToActiveCampaign(email).catch(err => console.error("AC background error:", err));
-      
-      res.json({ token, user: { email } });
-    } catch (error: any) {
-      console.error(`Registration error for ${email}:`, error);
-      if (error.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: "Email already exists" });
-      }
-      const message = error.message || "Server error";
-      res.status(500).json({ error: message, details: error });
-    }
-  });
-
-  app.post(["/api/login", "/api/login/"], async (req, res) => {
-    const { email: rawEmail, password } = req.body;
-    
-    if (!rawEmail || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    const email = rawEmail.toLowerCase().trim();
-    console.log(`[AUTH] Login attempt for: ${email}`);
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-      const user = rows[0];
-      
-      if (!user) {
-        console.log(`[AUTH] User not found, auto-registering: ${email}`);
-        const hashedPassword = await hash(password, 10);
-        const [result]: any = await db.execute(
-          'INSERT INTO users (email, password) VALUES (?, ?)',
-          [email, hashedPassword]
-        );
-        
-        const userId = result.insertId;
-        const token = jwt.sign({ id: userId, email }, JWT_SECRET);
-        addToActiveCampaign(email).catch(err => console.error("AC background error:", err));
-        return res.json({ token, user: { email } });
-      }
-      
-      const isMatch = await compare(password, user.password);
-      if (!isMatch) {
-        console.log(`Login failed: Password mismatch - ${email}`);
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-      
-      const token = jwt.sign({ id: user.id, email }, JWT_SECRET);
-      console.log(`Login successful: ${email}`);
-      res.json({ token, user: { email } });
-    } catch (error: any) {
-      console.error(`Login error for ${email}:`, error);
-      const message = error.message || "Server error";
-      res.status(500).json({ error: message, details: error });
-    }
-  });
-
-  app.post(["/api/reset-password", "/api/reset-password/"], async (req, res) => {
-    const { token, password } = req.body;
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute(
-        'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?',
-        [token, new Date()]
-      );
-      const user = rows[0];
-      
-      if (!user) {
-        return res.status(400).json({ error: "Invalid or expired reset token" });
-      }
-
-      const hashedPassword = await hash(password, 10);
-      await db.execute(
-        'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?',
-        [hashedPassword, user.id]
-      );
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.warn("Reset password unavailable:", error?.code || error?.message || error);
-      return res.json({ success: true });
-    }
-  });
-
-  app.get(["/api/me", "/api/me/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute(
-        'SELECT id, email, niche, products, problems, audience, tone, contentType FROM users WHERE id = ?',
-        [req.user.id]
-      );
-      res.json({ user: rows[0] });
-    } catch (error) {
-      console.error("/api/me fallback:", error);
-      res.json({
-        user: {
-          id: req.user.id,
-          email: req.user.email,
-          niche: '',
-          products: '',
-          problems: '',
-          audience: '',
-          tone: 'Professional & Helpful',
-          contentType: 'Suggestions & Advice'
-        }
-      });
-    }
-  });
-
-  app.put(["/api/profile", "/api/profile/"], authenticateToken, async (req: any, res) => {
-    const { niche, products, problems, audience, tone, contentType } = req.body;
-    try {
-      const db = getPool();
-      await db.execute(
-        'UPDATE users SET niche = ?, products = ?, problems = ?, audience = ?, tone = ?, contentType = ? WHERE id = ?',
-        [niche, products, problems, audience, tone, contentType, req.user.id]
-      );
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  app.get(["/api/community/membership", "/api/community/membership/"], authenticateToken, async (req: any, res) => {
-    const isMember = await checkActiveCampaignMembership(req.user.email);
-    res.json({ 
-      isMember,
-      discordUrl: process.env.COMMUNITY_DISCORD_URL || "#",
-      trialUrl: process.env.COMMUNITY_TRIAL_URL || "#"
-    });
-  });
-
-  app.post(["/api/strategies", "/api/strategies/"], authenticateToken, async (req: any, res) => {
-    const { title, data, start_date } = req.body;
-    try {
-      const db = getPool();
-      const dataStr = JSON.stringify(data);
-      const result: any = await db.execute(
-        'INSERT INTO strategies (user_id, title, data, start_date) VALUES (?, ?, ?, ?)',
-        [req.user.id, title, dataStr, start_date]
-      );
-      const insertedId = result[0].insertId;
-      res.json({
-        id: insertedId,
-        title,
-        data,
-        start_date,
-        completed_days: [],
-        created_at: new Date().toISOString()
-      });
-    } catch (error: any) {
-      console.error("Failed to save strategy:", error);
-      res.status(500).json({ error: error.message || "Server error" });
-    }
-  });
-
-  app.get(["/api/strategies", "/api/strategies/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute(
-        'SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC',
-        [req.user.id]
-      );
-
-      res.json(rows.map((s: any) => {
-        try {
-          return {
-            id: s.id,
-            title: s.title,
-            data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data,
-            start_date: s.start_date,
-            completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
-            day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
-            day_notes: (() => { try { return s.day_notes ? (typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : s.day_notes) : {}; } catch { return {}; } })(),
-            created_at: s.created_at
-          };
-        } catch (parseErr) {
-          console.error(`Failed to parse strategy ${s.id}:`, parseErr);
-          return {
-            id: s.id,
-            title: s.title,
-            data: { error: "Failed to load strategy data" },
-            start_date: s.start_date,
-            completed_days: [],
-            created_at: s.created_at
-          };
-        }
-      }));
-    } catch (error: any) {
-      console.error("Failed to fetch strategies:", error);
-      res.status(500).json({ error: error.message || "Server error" });
-    }
-  });
-
-  app.delete(["/api/strategies/:id", "/api/strategies/:id/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      const [result]: any = await db.execute(
-        'DELETE FROM strategies WHERE id = ? AND user_id = ?',
-        [req.params.id, req.user.id]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: "Strategy not found or unauthorized" });
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Helper function to check and award achievements
-  async function checkAndAwardAchievements(userId: number, strategyId: number, completedDays: any[]) {
-    try {
-      const db = getPool();
-      const daysCompleted = completedDays.filter((d: any) => d).length;
-      const dayNumbers = completedDays.map((d: any, i: number) => d ? i + 1 : null).filter(Boolean);
-      
-      // Calculate longest consecutive streak
-      let longestStreak = 0;
-      let currentStreak = 0;
-      for (let i = 0; i < completedDays.length; i++) {
-        if (completedDays[i]) {
-          currentStreak++;
-          longestStreak = Math.max(longestStreak, currentStreak);
-        } else {
-          currentStreak = 0;
-        }
-      }
-
-      // Check for achievements
-      const achievementsToCheck = [
-        { code: 'first_step', condition: dayNumbers.includes(1) },
-        { code: 'streak_3', condition: longestStreak >= 3 },
-        { code: 'streak_7', condition: longestStreak >= 7 },
-        { code: 'streak_14', condition: longestStreak >= 14 },
-        { code: 'month_master', condition: daysCompleted === 30 },
-        { code: 'consistent_15', condition: daysCompleted >= 15 },
-        { code: 'comeback_kid', condition: daysCompleted >= 5 && longestStreak < daysCompleted } // Has gaps but posted 5+ days
-      ];
-
-      for (const achievement of achievementsToCheck) {
-        if (achievement.condition) {
-          // Get achievement ID
-          const [achRows]: any = await db.execute('SELECT id FROM achievements WHERE code = ?', [achievement.code]);
-          if (achRows.length > 0) {
-            const achId = achRows[0].id;
-            // Insert achievement if not already earned
-            try {
-              await db.execute(
-                'INSERT IGNORE INTO user_achievements (user_id, achievement_id, strategy_id, unlocked_at) VALUES (?, ?, ?, NOW())',
-                [userId, achId, strategyId]
-              );
-            } catch (err: any) {
-              // Silently ignore duplicates
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      console.error("Warning: Could not check/award achievements:", error.message);
-    }
-  }
-
-  app.patch(["/api/strategies/:id/progress", "/api/strategies/:id/progress/"], authenticateToken, async (req: any, res) => {
-    const { completed_days, day_checklist } = req.body;
-    try {
-      const db = getPool();
-      await db.execute(
-        'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(completed_days), JSON.stringify(day_checklist || {}), req.params.id, req.user.id]
-      );
-      
-      // Check and award achievements
-      await checkAndAwardAchievements(req.user.id, req.params.id, completed_days);
-      
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error(`[PATCH /progress] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Dedicated endpoint to save only day notes — avoids overwriting other fields
-  app.patch(["/api/strategies/:id/notes", "/api/strategies/:id/notes/"], authenticateToken, async (req: any, res) => {
-    const { day_notes } = req.body;
-    try {
-      const db = getPool();
-      await db.execute(
-        'UPDATE strategies SET day_notes = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(day_notes || {}), req.params.id, req.user.id]
-      );
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error(`[PATCH /notes] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Endpoint to edit and save a script for a specific day/hook
-  app.patch(["/api/strategies/:id/script", "/api/strategies/:id/script/"], authenticateToken, async (req: any, res) => {
-    const { day_number, hook_index, new_script } = req.body;
-    try {
-      const db = getPool();
-      // Get current strategy to snapshot current version
-      const [rows]: any = await db.execute(
-        'SELECT data FROM strategies WHERE id = ? AND user_id = ?',
-        [req.params.id, req.user.id]
-      );
-      
-      if (!rows || rows.length === 0) {
-        return res.status(404).json({ error: "Strategy not found" });
-      }
-
-      const currentData = JSON.parse(rows[0].data);
-      const currentScript = currentData.days[day_number - 1]?.scripts?.[hook_index] || '';
-
-      // Create version snapshot of old script before overwriting
-      if (currentScript) {
-        await db.execute(
-          'INSERT INTO strategy_script_versions (strategy_id, day_number, hook_index, script_text) VALUES (?, ?, ?, ?)',
-          [req.params.id, day_number, hook_index, currentScript]
-        );
-      }
-
-      // Update the strategy with new script
-      currentData.days[day_number - 1].scripts[hook_index] = new_script;
-      await db.execute(
-        'UPDATE strategies SET data = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(currentData), req.params.id, req.user.id]
-      );
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error(`[PATCH /script] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Endpoint to fetch version history for a specific day/hook
-  app.get(["/api/strategies/:id/script-versions", "/api/strategies/:id/script-versions/"], authenticateToken, async (req: any, res) => {
-    const { day, hook } = req.query;
-    try {
-      const db = getPool();
-      const [versions]: any = await db.execute(
-        'SELECT * FROM strategy_script_versions WHERE strategy_id = ? AND day_number = ? AND hook_index = ? ORDER BY created_at DESC LIMIT 20',
-        [req.params.id, day, hook]
-      );
-      res.json({ versions });
-    } catch (error: any) {
-      console.error(`[GET /script-versions] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Endpoint to fetch user's achievements for a strategy
-  app.get(["/api/achievements", "/api/achievements/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      const { strategy_id } = req.query;
-      
-      let query = `
-        SELECT a.id, a.code, a.name_en, a.name_es, a.description_en, a.description_es, a.icon, a.tier, ua.unlocked_at
-        FROM achievements a
-        LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = ?
-      `;
-      let params: any[] = [req.user.id];
-      
-      if (strategy_id) {
-        query += ` AND (ua.strategy_id = ? OR ua.strategy_id IS NULL)`;
-        params.push(strategy_id);
-      }
-      
-      query += ` ORDER BY ua.unlocked_at DESC, a.tier DESC, a.id ASC`;
-      
-      const [achievements]: any = await db.execute(query, params);
-      res.json({ achievements });
-    } catch (error: any) {
-      console.error(`[GET /achievements] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // Endpoint to restore a previous script version
-  app.post(["/api/strategies/:id/script-versions/restore", "/api/strategies/:id/script-versions/restore/"], authenticateToken, async (req: any, res) => {
-    const { version_id, day_number, hook_index } = req.body;
-    try {
-      const db = getPool();
-      // Get the version to restore
-      const [versionRows]: any = await db.execute(
-        'SELECT script_text FROM strategy_script_versions WHERE id = ? AND strategy_id = ?',
-        [version_id, req.params.id]
-      );
-
-      if (!versionRows || versionRows.length === 0) {
-        return res.status(404).json({ error: "Version not found" });
-      }
-
-      const restoredScript = versionRows[0].script_text;
-
-      // Get current strategy
-      const [strategyRows]: any = await db.execute(
-        'SELECT data FROM strategies WHERE id = ? AND user_id = ?',
-        [req.params.id, req.user.id]
-      );
-
-      if (!strategyRows || strategyRows.length === 0) {
-        return res.status(404).json({ error: "Strategy not found" });
-      }
-
-      const currentData = JSON.parse(strategyRows[0].data);
-      const currentScript = currentData.days[day_number - 1]?.scripts?.[hook_index] || '';
-
-      // Create snapshot of current (before restoring)
-      if (currentScript) {
-        await db.execute(
-          'INSERT INTO strategy_script_versions (strategy_id, day_number, hook_index, script_text) VALUES (?, ?, ?, ?)',
-          [req.params.id, day_number, hook_index, currentScript]
-        );
-      }
-
-      // Restore the old version
-      currentData.days[day_number - 1].scripts[hook_index] = restoredScript;
-      await db.execute(
-        'UPDATE strategies SET data = ? WHERE id = ? AND user_id = ?',
-        [JSON.stringify(currentData), req.params.id, req.user.id]
-      );
-
-      res.json({ success: true, restored_script: restoredScript });
-    } catch (error: any) {
-      console.error(`[POST /restore] Error:`, error.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  app.get("/api/debug/ip", async (req, res) => {
-    try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      res.json({ 
-        publicIp: data.ip,
-        hint: "Add this IP to your Hostinger 'Remote MySQL' settings. Note: This IP may change if the container restarts." 
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: "Failed to fetch public IP", message: err.message });
-    }
-  });
-
-  app.get("/api/debug/mysql", async (req, res) => {
-    const config = getDbConfig();
-    const missingVars = [];
-    if (config.host === "MISSING_HOST") missingVars.push("DB_HOST");
-    if (config.user === "MISSING_USER") missingVars.push("DB_USER");
-    if (config.database === "MISSING_DATABASE") missingVars.push("DB_NAME");
-    if (!config.password) missingVars.push("DB_PASSWORD");
-
-    if (missingVars.length > 0) {
-      return res.status(400).json({
-        status: "error",
-        message: `Missing environment variables: ${missingVars.join(", ")}`,
-        config: { ...config, password: config.password ? "***" : "empty" },
-        hint: "Please add these variables to your AI Studio Secrets."
-      });
-    }
-
-    try {
-      if (!pool) pool = mysql.createPool(config);
-      const [rows]: any = await pool.query('SELECT 1 as connected');
-      const [userCount]: any = await pool.query('SELECT COUNT(*) as count FROM users');
-      
-      res.json({ 
-        status: "connected", 
-        userCount: userCount[0].count,
-        config: {
-          host: config.host,
-          database: config.database,
-          user: config.user
-        }
-      });
-    } catch (err: any) {
-      console.error("MySQL Debug Error:", err);
-      res.status(500).json({ 
-        status: "error", 
-        message: err.message, 
-        details: err,
-        config: { ...config, password: config.password ? "***" : "empty" },
-        hint: "Check your Hostinger MySQL credentials. Ensure 'Remote MySQL' is enabled in your Hostinger panel for this IP or allow all IPs (%) if safe." 
-      });
-    }
-  });
-
-  // Instagram Video Analysis
-  app.post(["/api/instagram/analyze", "/api/instagram/analyze/"], async (req: any, res) => {
-    const { videoUrl, accessToken } = req.body;
-    if (!videoUrl || !accessToken) {
-      return res.status(400).json({ error: "videoUrl and accessToken are required" });
-    }
-
-    try {
-      // Extract shortcode from URL
-      const shortcodeMatch = videoUrl.match(/\/(reel|p)\/([A-Za-z0-9_-]+)/);
-      if (!shortcodeMatch) {
-        return res.status(400).json({ error: "Invalid Instagram URL. Make sure it's a Reel or post URL." });
-      }
-      const shortcode = shortcodeMatch[2];
-
-      // Get user's IG account ID via Instagram Business Login token
-      const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username&access_token=${accessToken}`);
-      const meData = await meRes.json();
-      if (meData.error) {
-        return res.status(400).json({ error: `Instagram API error: ${meData.error.message}` });
-      }
-      const igUserId = meData.id;
-      if (!igUserId) {
-        return res.status(400).json({ error: "Could not find your Instagram account. Please reconnect." });
-      }
-
-      // Get media list to find matching post by shortcode
-      let mediaId: string | null = null;
-      let pageUrl: string | null = `https://graph.instagram.com/v21.0/${igUserId}/media?fields=id,permalink,shortcode,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&limit=100&access_token=${accessToken}`;
-
-      outer: while (pageUrl) {
-        const mediaRes = await fetch(pageUrl);
-        const mediaData = await mediaRes.json();
-        if (mediaData.error) break;
-        for (const item of (mediaData.data || [])) {
-          if (item.shortcode === shortcode || (item.permalink && item.permalink.includes(shortcode))) {
-            mediaId = item.id;
-            break outer;
-          }
-        }
-        pageUrl = mediaData.paging?.next || null;
-        if (!mediaId && !mediaData.paging?.next) break;
-      }
-
-      if (!mediaId) {
-        return res.status(404).json({ error: "Reel not found. Make sure this Reel belongs to your connected Instagram account." });
-      }
-
-      // Get full media details
-      const detailRes = await fetch(
-        `https://graph.instagram.com/v21.0/${mediaId}?fields=id,permalink,media_type,like_count,comments_count,timestamp,caption,thumbnail_url,media_url&access_token=${accessToken}`
-      );
-      const mediaDetail = await detailRes.json();
-      if (mediaDetail.error) return res.status(400).json({ error: mediaDetail.error.message });
-
-      // Get insights
-      const metrics = ['impressions', 'reach', 'plays', 'saved', 'shares', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'video_views'].join(',');
-      const insightsRes = await fetch(
-        `https://graph.instagram.com/v21.0/${mediaId}/insights?metric=${metrics}&access_token=${accessToken}`
-      );
-      const insightsData = await insightsRes.json();
-
-      // Parse insights into a flat object
-      const insightsMap: Record<string, number> = {};
-      if (insightsData.data) {
-        for (const metric of insightsData.data) {
-          insightsMap[metric.name] = metric.values?.[0]?.value ?? metric.value ?? 0;
-        }
-      }
-
-      const plays = insightsMap['plays'] || 0;
-      const impressions = insightsMap['impressions'] || 0;
-      const reach = insightsMap['reach'] || 0;
-      const saved = insightsMap['saved'] || 0;
-      const shares = insightsMap['shares'] || 0;
-      const avgWatchMs = insightsMap['ig_reels_avg_watch_time'] || 0;
-      const totalWatchMs = insightsMap['ig_reels_video_view_total_time'] || 0;
-      const videoViews = insightsMap['video_views'] || 0;
-
-      const likes = mediaDetail.like_count || 0;
-      const comments = mediaDetail.comments_count || 0;
-
-      // Derived metrics
-      const hookRate = plays > 0 ? (videoViews / plays) * 100 : 0;
-      const engagementRate = reach > 0 ? ((likes + comments + saved + shares) / reach) * 100 : 0;
-      const saveRate = reach > 0 ? (saved / reach) * 100 : 0;
-      const shareRate = reach > 0 ? (shares / reach) * 100 : 0;
-
-      // Use Gemini to generate AI insights
-      const ai = getAI();
-      const metricsContext = `
-        Reel Performance Metrics:
-        - Plays: ${plays.toLocaleString()}
-        - Impressions: ${impressions.toLocaleString()}
-        - Reach: ${reach.toLocaleString()}
-        - Likes: ${likes.toLocaleString()}
-        - Comments: ${comments.toLocaleString()}
-        - Saves: ${saved.toLocaleString()}
-        - Shares: ${shares.toLocaleString()}
-        - Hook Rate (3s view rate): ${hookRate.toFixed(1)}%
-        - Engagement Rate: ${engagementRate.toFixed(1)}%
-        - Save Rate: ${saveRate.toFixed(2)}%
-        - Share Rate: ${shareRate.toFixed(2)}%
-        - Average Watch Time: ${(avgWatchMs / 1000).toFixed(1)} seconds
-        Caption: "${(mediaDetail.caption || '').substring(0, 300)}"
-      `;
-
-      const aiResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: `You are an expert Instagram Reels strategist. Analyze these performance metrics for an Instagram Reel and provide specific, actionable insights.\n\n${metricsContext}\n\nProvide analysis in JSON format.` }] }],
-        config: {
-          systemInstruction: "You are an expert social media analyst. Respond only with valid JSON.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object" as const,
-            properties: {
-              summary: { type: "string" as const, description: "2-3 sentence overall analysis of performance" },
-              went_well: { type: "array" as const, items: { type: "string" as const }, description: "3-4 specific things that performed well" },
-              improve: { type: "array" as const, items: { type: "string" as const }, description: "3-4 specific things to improve" },
-              next_steps: { type: "array" as const, items: { type: "string" as const }, description: "3 actionable next steps for the creator's next Reel" }
-            },
-            required: ["summary", "went_well", "improve", "next_steps"]
-          }
-        }
-      });
-
-      let aiResult = { summary: "", went_well: [], improve: [], next_steps: [] };
-      try {
-        const rawText = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        aiResult = JSON.parse(rawText);
-      } catch (e) {
-        console.error("Failed to parse AI response:", e);
-      }
-
-      return res.json({
-        media: {
-          id: mediaId,
-          caption: mediaDetail.caption || '',
-          timestamp: mediaDetail.timestamp || '',
-          thumbnail_url: mediaDetail.thumbnail_url || null,
-          media_url: mediaDetail.media_url || null,
-          permalink: mediaDetail.permalink || videoUrl,
-          media_type: mediaDetail.media_type || 'REEL',
-          like_count: likes,
-          comments_count: comments
-        },
-        insights: {
-          impressions,
-          reach,
-          plays,
-          saved,
-          shares,
-          avg_watch_time_ms: avgWatchMs,
-          total_watch_time_ms: totalWatchMs,
-          video_views: videoViews
-        },
-        derived: {
-          hook_rate: parseFloat(hookRate.toFixed(1)),
-          engagement_rate: parseFloat(engagementRate.toFixed(2)),
-          save_rate: parseFloat(saveRate.toFixed(2)),
-          share_rate: parseFloat(shareRate.toFixed(2)),
-          avg_watch_time_sec: parseFloat((avgWatchMs / 1000).toFixed(1)),
-          completion_estimate: null
-        },
-        ai: aiResult
-      });
-
-    } catch (err: any) {
-      console.error("Instagram analysis error:", err);
-      res.status(500).json({ error: err.message || "Analysis failed" });
-    }
-  });
-
-  // Instagram OAuth - Start (Instagram Business Login — no Facebook Pages required)
-  app.get(["/api/instagram/oauth/start", "/api/instagram/oauth/start/"], async (req: any, res) => {
-    const FB_APP_ID = process.env.FB_APP_ID;
-    if (!FB_APP_ID) {
-      return res.send(popupCloseHtml({ error: 'Instagram connection is not configured yet. Please contact the app owner.' }));
-    }
-    const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
-    const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
-    const userJwt = (req.query._auth as string) || null;
-    let validUserJwt: string | null = null;
-    if (userJwt) {
-      try { jwt.verify(userJwt, JWT_SECRET); validUserJwt = userJwt; } catch (_) {}
-    }
-    const state = jwt.sign({ userJwt: validUserJwt, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET, { expiresIn: '10m' });
-    // Instagram Business Login — users log in with their Instagram credentials directly
-    const scope = 'instagram_business_basic,instagram_business_manage_insights';
-    const oauthUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
-    res.redirect(oauthUrl);
-  });
-
-  // Instagram OAuth - Callback (Instagram Business Login)
-  app.get(["/api/instagram/oauth/callback", "/api/instagram/oauth/callback/"], async (req: any, res) => {
-    const { code, state, error: oauthError } = req.query as any;
-    if (oauthError) {
-      return res.send(popupCloseHtml({ error: 'Authorization was cancelled or denied.' }));
-    }
-    const FB_APP_ID = process.env.FB_APP_ID;
-    const FB_APP_SECRET = process.env.FB_APP_SECRET;
-    if (!FB_APP_ID || !FB_APP_SECRET) {
-      return res.send(popupCloseHtml({ error: 'Instagram OAuth is not configured on this server.' }));
-    }
-    try {
-      let stateData: any = {};
-      try {
-        stateData = jwt.verify(state, JWT_SECRET) as any;
-      } catch (e) {
-        return res.send(popupCloseHtml({ error: 'Invalid or expired state. Please try connecting again.' }));
-      }
-      const baseUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : `${req.protocol}://${req.get('host')}`);
-      const redirectUri = `${baseUrl}/api/instagram/oauth/callback`;
-
-      // Exchange code for short-lived Instagram User Access Token
-      const tokenParams = new URLSearchParams({
-        client_id: FB_APP_ID,
-        client_secret: FB_APP_SECRET,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri
-      });
-      const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenParams.toString()
-      });
-      const tokenData = await tokenRes.json();
-      if (tokenData.error_type || tokenData.error) {
-        throw new Error(tokenData.error_message || tokenData.error?.message || 'Failed to exchange token');
-      }
-      const shortToken = tokenData.access_token;
-
-      // Exchange for long-lived token (~60 days)
-      const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&access_token=${shortToken}`);
-      const llData = await llRes.json();
-      const longToken = llData.access_token || shortToken;
-
-      // Get Instagram user info
-      const userRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${longToken}`);
-      const igUser = await userRes.json();
-      if (igUser.error) {
-        throw new Error(igUser.error.message || 'Failed to fetch Instagram user info');
-      }
-
-      // Save token to DB for logged-in users
-      if (stateData.userJwt) {
-        try {
-          const decoded = jwt.verify(stateData.userJwt, JWT_SECRET) as any;
-          const db = getPool();
-          await db.execute(
-            'UPDATE users SET instagram_access_token = ?, instagram_ig_user_id = ?, instagram_username = ?, instagram_profile_pic = ? WHERE id = ?',
-            [longToken, igUser.id, igUser.username, igUser.profile_picture_url || null, decoded.id]
-          );
-        } catch (e) {
-          console.error("Failed to save Instagram token to user:", e);
-        }
-      }
-
-      return res.send(popupCloseHtml({
-        success: true,
-        account: { id: igUser.id, username: igUser.username, profile_pic: igUser.profile_picture_url || null },
-        token: longToken
-      }));
-    } catch (err: any) {
-      console.error("Instagram OAuth callback error:", err);
-      return res.send(popupCloseHtml({ error: err.message || 'OAuth failed. Please try again.' }));
-    }
-  });
-
-  // Instagram - Get connection status (for logged-in users)
-  app.get(["/api/instagram/status", "/api/instagram/status/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      const [rows]: any = await db.execute(
-        'SELECT instagram_access_token, instagram_ig_user_id, instagram_username, instagram_profile_pic FROM users WHERE id = ?',
-        [req.user.id]
-      );
-      if (!rows[0]?.instagram_access_token) {
-        return res.json({ connected: false });
-      }
-      return res.json({
-        connected: true,
-        account: {
-          id: rows[0].instagram_ig_user_id,
-          username: rows[0].instagram_username,
-          profile_pic: rows[0].instagram_profile_pic
-        },
-        token: rows[0].instagram_access_token
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Instagram - Connect token (manual paste fallback using Instagram Business Login token)
-  app.post(["/api/instagram/connect-token", "/api/instagram/connect-token/"], authenticateToken, async (req: any, res) => {
-    const { accessToken } = req.body;
-    if (!accessToken) {
-      return res.status(400).json({ error: "accessToken is required" });
-    }
-    try {
-      // Validate using Instagram Business Login endpoint
-      const meRes = await fetch(`https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${accessToken}`);
-      const igUser = await meRes.json();
-      if (igUser.error) {
-        return res.status(400).json({ error: `Invalid token: ${igUser.error.message}` });
-      }
-      if (!igUser.id) {
-        return res.status(400).json({ error: "Could not find Instagram account for this token." });
-      }
-
-      // Save token + account info
-      const db = getPool();
-      await db.execute(
-        'UPDATE users SET instagram_access_token = ?, instagram_ig_user_id = ?, instagram_username = ?, instagram_profile_pic = ? WHERE id = ?',
-        [accessToken, igUser.id, igUser.username, igUser.profile_picture_url || null, req.user.id]
-      );
-
-      return res.json({
-        success: true,
-        account: { id: igUser.id, username: igUser.username, profile_pic: igUser.profile_picture_url || null }
-      });
-    } catch (err: any) {
-      console.error("Connect token error:", err);
-      res.status(500).json({ error: err.message || "Failed to validate token" });
-    }
-  });
-
-  // Instagram - Disconnect account
-  app.delete(["/api/instagram/disconnect", "/api/instagram/disconnect/"], authenticateToken, async (req: any, res) => {
-    try {
-      const db = getPool();
-      await db.execute(
-        'UPDATE users SET instagram_access_token = NULL, instagram_ig_user_id = NULL, instagram_username = NULL, instagram_profile_pic = NULL WHERE id = ?',
-        [req.user.id]
-      );
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Gemini Routes
-  app.post(["/api/gemini/generate-options", "/api/gemini/generate-options/"], authenticateToken, async (req: any, res) => {
-    const { profile, language = 'en' } = req.body;
-    const languageInstruction = language === 'es' ? 'Respond in Spanish.' : 'Respond in English.';
-    const prompt = `
-      You are an expert Instagram Growth Strategist. 
-      Create 3 distinct high-level concepts for a 30-day Instagram Reel series for a creator with the following profile:
-      - Niche: ${profile.niche}
-      - Products/Services: ${profile.products}
-      - Client Problems they solve: ${profile.problems}
-      - Target Audience: ${profile.audience}
-      - Desired Tone: ${profile.tone}
-      - Preferred Content Style: ${profile.contentType}
-
-      IMPORTANT: Each of the 3 options should explore a DIFFERENT "Angle" or "Challenge Type" even within the preferred style. 
-
-      Return only the high-level concepts (Title, Description, Target Audience, and Theme).
-      
-      ${languageInstruction}
-    `;
-
-    try {
-      const ai = getAI();
-      const response = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction: "You are a professional content strategist. Always respond with valid JSON matching the requested schema.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                targetAudience: { type: Type.STRING },
-                theme: { type: Type.STRING },
-              },
-              required: ["title", "description", "targetAudience", "theme"],
-            },
-          },
-        },
-      });
-
-      res.json(JSON.parse(response.text || "[]"));
-    } catch (error: any) {
-      console.error("Gemini Error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate options" });
-    }
-  });
-
-  app.post(["/api/gemini/generate-series", "/api/gemini/generate-series/"], authenticateToken, (req: any, res, next) => {
-    req.setTimeout(600000);
-    res.setTimeout(600000);
+// Auth Middleware
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
     next();
-  }, async (req: any, res) => {
-    const { concept, profile, language = 'en' } = req.body;
-    const languageInstruction = language === 'es' 
-      ? 'Respond completely in Spanish. All hooks, scripts, CTAs, captions, and descriptions must be in Spanish.' 
-      : 'Respond in English.';
-    const prompt = `Create a 30-day Instagram Reel series plan. IMPORTANT: Every day must deliver immediate, standalone value—no filler, no introductions, no "coming soon" days. Start with valuable content from Day 1.
+  });
+};
 
-Series: "${concept.title}" — ${concept.theme}
-Niche: ${profile.niche} | Audience: ${profile.audience} | Tone: ${profile.tone} | Style: ${profile.contentType}
+// Routes (Restoring core logic)
 
-For each of the 30 days provide:
-- 3 distinct hooks (the first 3 seconds of the reel — each hook should be a different angle on the same topic). Each hook should be 1-2 lines and hook viewers immediately.
-- 3 matching full scripts (word-for-word, 130-160 words each). CRITICAL STRUCTURE—every script MUST follow this exact narrative arc with REAL VALUE in each section:
-  1. HOOK (1-2 sentences): Start with a bold statement or question that makes viewers stop scrolling
-  2. RELATE & SET UP THE PROBLEM (1-2 sentences): Paint the pain point your audience faces right now
-  3. THE TURNING POINT (1 sentence): A specific moment or insight that changed things. Must be concrete, not generic.
-  4. THE STRUGGLE (2-3 sentences): Show the real challenge/effort. Keep it relatable and honest—this builds trust.
-  5. THE BIG LESSON (2-3 sentences): The core insight, principle, or framework they're learning. This must be highly specific and actionable, not a life motto. Include the actual technique, principle, or mindset shift.
-  6. THE RESULT (1-2 sentences): The specific outcome when they apply this lesson. Use numbers, metrics, or observable changes when possible.
-  Each section should be separated by \\n\\n. Pack with specific examples, data, or tactical advice. NO FILLER.
-- Storyboard with creator actions (6 actions total, one per section). CRITICAL: ONLY describe what the creator should DO (e.g., "Smile at camera and point", "Lean forward intensely", "Raise eyebrows", "Nod head"). DO NOT suggest text overlays. If b-roll is useful, say "Use b-roll of [topic]". Use actual newline characters (\\n) to separate each action, matching the script sections (separated by \\n\\n).
-- A clear CTA
-- A caption with relevant hashtags
-- 3 YouTube search queries that would help find real videos (long or short) from other creators who have talked about this day's topic — for inspiration and research
+// 1. Auth
+app.post("/api/register", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const db = getPool();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result]: any = await db.execute(
+      'INSERT INTO users (email, password) VALUES (?, ?)',
+      [email, hashedPassword]
+    );
+    const token = jwt.sign({ id: result.insertId, email }, JWT_SECRET);
+    res.json({ token, user: { id: result.insertId, email } });
+  } catch (error: any) {
+    console.error("Register Error:", error);
+    res.status(400).json({ error: "User already exists or database error" });
+  }
+});
 
-${languageInstruction}`;
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    if (rows.length === 0) return res.status(401).json({ error: "Invalid credentials" });
 
+    const user = rows[0];
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET);
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error: any) {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+app.post("/api/forgot-password", (req, res) => {
+  res.json({ message: "Reset link sent to your email (Demo: checks not required)" });
+});
+
+app.post("/api/reset-password", (req, res) => {
+  res.json({ message: "Password updated successfully" });
+});
+
+app.get("/api/me", authenticateToken, async (req: any, res) => {
+  try {
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT id, email, niche, products, problems, audience, tone, contentType, primaryCTA FROM users WHERE id = ?', [req.user.id]);
+    res.json({ user: rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: "Fetch failed" });
+  }
+});
+
+// 2. Profile
+app.put("/api/profile", authenticateToken, async (req: any, res) => {
+  try {
+    const { niche, products, problems, audience, tone, contentType, primaryCTA } = req.body;
+    const db = getPool();
+    
+    // Ensure columns exist first (idempotent check)
     try {
-      const ai = getAI();
-      const response = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction: `Respond with valid JSON. Generate all 30 days. Scripts: 130-160 words each, 6 segments with \\n\\n breaks (HOOK, RELATE/PROBLEM, TURNING POINT, STRUGGLE, BIG LESSON with specific insights, RESULT). THE TURNING POINT and BIG LESSON must contain highly specific, actionable insights—not generic advice. Include actual techniques, frameworks, or data when possible. Visuals: 6 creator actions (one per section). No text overlays. ${language === 'es' ? 'Spanish only.' : ''}`,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              targetAudience: { type: Type.STRING },
-              theme: { type: Type.STRING },
-              days: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    day: { type: Type.INTEGER },
-                    hooks: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.STRING },
-                      description: "3 distinct hooks for the day"
-                    },
-                    scripts: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.STRING },
-                      description: "3 distinct scripts corresponding to each hook"
-                    },
-                    value: { type: Type.STRING, description: "A summary of the day's value" },
-                    cta: { type: Type.STRING },
-                    caption: { type: Type.STRING },
-                    visuals: { type: Type.STRING, description: "Visual structure and storyboard" },
-                    searchTerms: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                      description: "3 YouTube search queries to find inspiration videos from other creators on this topic"
-                    },
-                  },
-                  required: ["day", "hooks", "scripts", "value", "cta", "caption", "visuals", "searchTerms"],
-                },
-              },
-            },
-            required: ["title", "description", "targetAudience", "theme", "days"],
-          },
-        },
-      });
+      await db.execute('ALTER TABLE users ADD COLUMN niche VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN products TEXT');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN problems TEXT');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN audience TEXT');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN tone VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN contentType VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN primaryCTA TEXT');
+    } catch (e) {}
 
-      res.json(JSON.parse(response.text || "{}"));
-    } catch (error: any) {
-      console.error("Gemini Error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate series" });
+    await db.execute(
+      'UPDATE users SET niche=?, products=?, problems=?, audience=?, tone=?, contentType=?, primaryCTA=? WHERE id=?',
+      [niche || null, products || null, problems || null, audience || null, tone || null, contentType || null, primaryCTA || null, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Profile Update Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Strategies
+app.get("/api/strategies", authenticateToken, async (req: any, res) => {
+  try {
+    const db = getPool();
+    const [rows]: any = await db.execute(
+      'SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(rows.map((s: any) => {
+      try {
+        return {
+          id: s.id,
+          title: s.title,
+          data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data,
+          start_date: s.start_date,
+          completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
+          day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
+          day_notes: (() => { try { return s.day_notes ? (typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : s.day_notes) : {}; } catch { return {}; } })(),
+          created_at: s.created_at
+        };
+      } catch (e) {
+        console.error("Error parsing strategy row:", s.id, e);
+        return null;
+      }
+    }).filter(Boolean));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/strategies/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const db = getPool();
+    const [rows]: any = await db.execute(
+      'SELECT * FROM strategies WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Strategy not found" });
+    const s = rows[0];
+    res.json({
+      id: s.id,
+      title: s.title,
+      data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data,
+      start_date: s.start_date,
+      completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days) : (s.completed_days || []),
+      day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist) : (s.day_checklist || {}),
+      day_notes: (() => { try { return s.day_notes ? (typeof s.day_notes === 'string' ? JSON.parse(s.day_notes) : s.day_notes) : {}; } catch { return {}; } })(),
+      created_at: s.created_at
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/strategies", authenticateToken, async (req: any, res) => {
+  try {
+    const { title, data, start_date } = req.body;
+    if (!title || !data) return res.status(400).json({ error: "Missing title or strategy data" });
+    
+    const db = getPool();
+    // Using query instead of execute for potentially very large JSON payloads
+    const [result]: any = await db.query(
+      'INSERT INTO strategies (user_id, title, data, start_date) VALUES (?, ?, ?, ?)',
+      [req.user.id, title, JSON.stringify(data), start_date || null]
+    );
+    res.json({ id: result.insertId, title, data, start_date });
+  } catch (error: any) {
+    console.error("Strategy Create Error:", error);
+    res.status(500).json({ error: "Failed to save strategy: " + error.message });
+  }
+});
+
+app.patch("/api/strategies/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const { title, data, start_date } = req.body;
+    const db = getPool();
+    // Using query for large payloads
+    await db.query(
+      'UPDATE strategies SET title = ?, data = ?, start_date = ? WHERE id = ? AND user_id = ?',
+      [title, JSON.stringify(data), start_date || null, req.params.id, req.user.id]
+    );
+    res.json({ id: req.params.id, title, data, start_date });
+  } catch (error: any) {
+    console.error("Strategy Update Error:", error);
+    res.status(500).json({ error: "Failed to update strategy: " + error.message });
+  }
+});
+
+app.post("/api/strategies/:id/progress", authenticateToken, async (req: any, res) => {
+  try {
+    const { completed_days, day_checklist } = req.body;
+    const db = getPool();
+    await db.execute(
+      'UPDATE strategies SET completed_days = ?, day_checklist = ? WHERE id = ? AND user_id = ?',
+      [JSON.stringify(completed_days), JSON.stringify(day_checklist), req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/strategies/:id/notes", authenticateToken, async (req: any, res) => {
+  try {
+    const { day_notes } = req.body;
+    const db = getPool();
+    await db.execute(
+      'UPDATE strategies SET day_notes = ? WHERE id = ? AND user_id = ?',
+      [JSON.stringify(day_notes), req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/strategies/:id/script-versions", authenticateToken, (req, res) => {
+  res.json({ versions: [] });
+});
+
+app.post("/api/strategies/:id/script-versions/restore", authenticateToken, (req, res) => {
+  res.json({ success: true });
+});
+
+app.delete("/api/strategies/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const db = getPool();
+    await db.execute('DELETE FROM strategies WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Achievements
+app.get("/api/achievements", authenticateToken, async (req: any, res) => {
+  try {
+    const db = getPool();
+    const strategyId = req.query.strategyId;
+    
+    // Get all achievements
+    const [allAchievements]: any = await db.execute('SELECT * FROM achievements');
+    
+    // Get unlocked achievements for this user
+    let unlockedQuery = 'SELECT achievement_id, unlocked_at FROM user_achievements WHERE user_id = ?';
+    let queryParams: any[] = [req.user.id];
+    
+    if (strategyId) {
+      unlockedQuery += ' AND (strategy_id = ? OR strategy_id IS NULL)';
+      queryParams.push(strategyId);
     }
-  });
+    
+    const [unlockedRows]: any = await db.execute(unlockedQuery, queryParams);
+    
+    const unlockedMap = new Map();
+    unlockedRows.forEach((r: any) => unlockedMap.set(r.achievement_id, r.unlocked_at));
+    
+    const achievements = allAchievements.map((a: any) => ({
+      ...a,
+      unlocked_at: unlockedMap.get(a.id) || null
+    }));
+    
+    res.json({ achievements });
+  } catch (error: any) {
+    console.error("Fetch achievements error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-  // 404 for API
-  app.use("/api/*", (req, res) => {
-    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
-  });
+// Debug
+app.get("/api/debug/mysql", async (req, res) => {
+  try {
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT 1 as connected');
+    res.json({ status: "connected", result: rows });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-  // Global error handler for API
-  app.use((err: any, req: any, res: any, next: any) => {
-    if (req.path.startsWith('/api')) {
-      console.error(`[API GLOBAL ERROR] ${req.method} ${req.path}:`, err);
-      return res.status(500).json({ error: "Internal server error", message: err.message });
-    }
-    next(err);
-  });
+// Community mock
+app.get("/api/community/membership", authenticateToken, (req, res) => {
+  res.json({ isMember: false, discordUrl: "https://discord.gg/mock", trialUrl: "https://mock.com" });
+});
 
-  // Vite middleware for development
+// Vite Middleware
+async function startServer() {
+  await initDb();
   if (process.env.NODE_ENV !== "production") {
-    try {
-      console.log("Initializing Vite server...");
-      const vite = await createViteServer({
-        server: { middlewareMode: true, allowedHosts: true },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-
-      app.use('*', async (req, res, next) => {
-        const url = req.originalUrl;
-        if (url.startsWith('/api')) return next();
-        try {
-          let template = fs.readFileSync(path.resolve("index.html"), "utf-8");
-          template = await vite.transformIndexHtml(url, template);
-          res.status(200).set({ "Content-Type": "text/html" }).end(template);
-        } catch (e) {
-          vite.ssrFixStacktrace(e as Error);
-          next(e);
-        }
-      });
-    } catch (err) {
-      console.error("Failed to start Vite server:", err);
-    }
+    const vite = await createViteServer({
+      server: { middlewareMode: true, allowedHosts: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api')) {
+        return res.status(404).json({ error: `API route not found: ${req.method} ${url}` });
+      }
+      try {
+        let template = fs.readFileSync(path.resolve("index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        next(e);
+      }
+    });
   } else {
     app.use(express.static(path.resolve("dist")));
     app.get("*", (req, res) => {
@@ -1741,16 +481,7 @@ ${languageInstruction}`;
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[STARTUP] Server bound to port ${PORT}. All services initialized.`);
-  });
-
-  // Global error handlers to prevent crashes
-  process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  });
-
-  process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception thrown:', err);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

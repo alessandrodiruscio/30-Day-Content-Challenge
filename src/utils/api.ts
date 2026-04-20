@@ -1,9 +1,9 @@
 /**
  * A robust fetch wrapper with retry logic, timeout handling, and better error reporting
  */
-export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000, timeout = 300000): Promise<Response> {
+export async function robustFetch(url: string, options: RequestInit = {}, retries = 2, backoff = 1000, timeout = 30000): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const timeoutId = setTimeout(() => controller.abort(), timeout); // custom timeout
   
   try {
     const res = await fetch(url, {
@@ -12,11 +12,22 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
     });
     
     clearTimeout(timeoutId);
-    
-    if (!res.ok && res.status >= 500 && retries > 0) {
-      if ((options.headers as Record<string, string> | undefined)?.['X-No-Retry'] === '1') {
-        return res;
+
+    // Detect environment bootloader/proxy "Starting Server" page
+    // These often return 200 OK with HTML even for API endpoints during startup
+    if (url.includes('/api/')) {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) {
+        if (retries > 0) {
+          console.warn(`[API] Received HTML instead of JSON for ${url}. This usually means the server is booting. Retrying in ${backoff}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          return robustFetch(url, options, retries - 1, backoff * 2, timeout);
+        }
       }
+    }
+    
+    // Retry on 5xx errors (server issues)
+    if (!res.ok && res.status >= 500 && retries > 0) {
       console.warn(`Retrying ${url} due to server error ${res.status}...`);
       await new Promise(resolve => setTimeout(resolve, backoff));
       return robustFetch(url, options, retries - 1, backoff * 2, timeout);
@@ -26,6 +37,7 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
   } catch (err: any) {
     clearTimeout(timeoutId);
     
+    // Handle specific mobile/Safari errors
     let errorMessage = err.message || String(err) || 'Unknown network error';
     const lowerMessage = errorMessage.toLowerCase();
     
@@ -41,6 +53,7 @@ export async function robustFetch(url: string, options: RequestInit = {}, retrie
       return robustFetch(url, options, retries - 1, backoff * 2, timeout);
     }
     
+    // Create a new error with the better message but keep the original name if possible
     const enhancedError = new Error(errorMessage);
     enhancedError.name = err.name || 'FetchError';
     throw enhancedError;
@@ -68,16 +81,18 @@ export async function safeJson(res: Response) {
 }
 
 /**
- * Fetch user's achievements
+ * Fetch achievements for a specific strategy
  */
 export async function fetchAchievements(token: string, strategyId?: number) {
-  const url = strategyId ? `/api/achievements?strategy_id=${strategyId}` : '/api/achievements';
+  const url = strategyId ? `/api/achievements?strategyId=${strategyId}` : '/api/achievements';
   const res = await robustFetch(url, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
+    headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Failed to fetch achievements');
-  return safeJson(res);
+  
+  if (!res.ok) {
+    const errorData = await safeJson(res).catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to fetch achievements');
+  }
+  
+  return await safeJson(res);
 }

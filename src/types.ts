@@ -24,11 +24,13 @@ export interface ContentDay {
   day: number;
   hooks: string[];
   scripts: string[];
+  captions: string[];
   selectedHookIndex?: number;
   value: string;
   cta: string;
   caption: string;
   visuals: string;
+  visuals_list?: string[];
 }
 
 export interface UserProfile {
@@ -38,6 +40,7 @@ export interface UserProfile {
   audience: string;
   tone: string;
   contentType: string;
+  primaryCTA: string;
   startDate?: string;
 }
 
@@ -49,6 +52,6 @@ export interface Achievement {
   description_en: string;
   description_es: string;
   icon: string;
-  tier: 'bronze' | 'silver' | 'gold';
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
   unlocked_at?: string;
 }

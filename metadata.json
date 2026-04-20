@@ -1,5 +1,6 @@
 {
-  "name": "30-Day Content Challenge",
+  "name": "The 30-Day Content Challenge",
   "description": "Generate personalized 30-day Instagram Reel series ideas based on your niche, products, and audience pain points.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": []
 }
