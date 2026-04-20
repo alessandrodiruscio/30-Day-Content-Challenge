@@ -25,8 +25,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // DB Configuration
 const getDbConfig = () => {
   const host = process.env.DB_HOST;
-  if (!host) {
-    console.warn("DB_HOST is missing - database operations will fail");
+  if (!host && process.env.VERCEL) {
+    console.error("CRITICAL: DB_HOST environment variable is missing for Vercel deployment.");
   }
   return {
     host: host || "127.0.0.1",
@@ -39,14 +39,21 @@ const getDbConfig = () => {
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 10000,
-    connectTimeout: 30000,
+    connectTimeout: 5000, // Reduced from 30s to 5s for faster failure on Vercel
   };
 };
 
 let pool: mysql.Pool;
+let dbInitialized = false;
+
 const getPool = () => {
   if (!pool) {
-    pool = mysql.createPool(getDbConfig());
+    const config = getDbConfig();
+    // Fail immediately if we are on Vercel and host is default/missing
+    if ((!process.env.DB_HOST || config.host === "127.0.0.1") && process.env.VERCEL) {
+      throw new Error("DATABASE_CONFIG_ERROR: No DB_HOST provided. Please set up your database environment variables (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME) in Vercel settings.");
+    }
+    pool = mysql.createPool(config);
   }
   return pool;
 };
@@ -178,9 +185,35 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+// Lazy DB Init Middleware for Vercel
+const ensureDb = async (req: any, res: any, next: any) => {
+  if (!dbInitialized && req.url.startsWith('/api') && !req.url.includes('/api/health')) {
+    try {
+      console.log("Lazy initializing database schema...");
+      await initDb();
+      dbInitialized = true;
+    } catch (err: any) {
+      console.error("Lazy DB initialization failed:", err);
+      // We don't block here, let the handler fail naturally with better error reporting
+    }
+  }
+  next();
+};
+
+app.use(ensureDb);
+
 // Routes (Restoring core logic)
 
 // 1. Auth
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    env: process.env.NODE_ENV,
+    vercel: !!process.env.VERCEL,
+    db_configured: !!process.env.DB_HOST 
+  });
+});
+
 app.post("/api/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -516,9 +549,4 @@ async function startServer() {
 // Start if not in Vercel environment (Vercel will import the app and use its own runner)
 if (!process.env.VERCEL) {
   startServer();
-} else {
-  // On Vercel, we still need to initialize the database schema
-  initDb().catch(err => {
-    console.error("Delayed DB Init failed:", err);
-  });
 }
