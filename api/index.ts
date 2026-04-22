@@ -3,6 +3,14 @@ import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import { 
+  generateOptions, 
+  generateSeries, 
+  generateSeriesChunk, 
+  generateDayContent, 
+  refineScript, 
+  regenerateDayContentWithIdea 
+} from "./_geminiService";
 
 // 1. Load environment variables
 dotenv.config();
@@ -385,15 +393,6 @@ post("/api/admin/reinit-db", async (req: any, res: any) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-import { 
-  generateOptions, 
-  generateSeries, 
-  generateSeriesChunk, 
-  generateDayContent, 
-  refineScript, 
-  regenerateDayContentWithIdea 
-} from "./geminiService";
 
 // Gemini API Routes
 post("/api/gemini/options", authenticateToken, async (req: any, res: any) => {
