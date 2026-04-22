@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { UserProfile, SeriesConcept, ContentSeries } from "../src/types";
+import type { UserProfile, SeriesConcept, ContentSeries } from "../src/types.js";
 
 // Initialize Gemini with the platform-provided API key
 const getAI = () => {

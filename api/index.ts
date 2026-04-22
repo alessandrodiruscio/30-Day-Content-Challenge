@@ -10,7 +10,7 @@ import {
   generateDayContent, 
   refineScript, 
   regenerateDayContentWithIdea 
-} from "./_geminiService";
+} from "./_geminiService.js";
 
 // 1. Load environment variables
 dotenv.config();
