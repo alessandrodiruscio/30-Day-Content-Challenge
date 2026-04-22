@@ -533,12 +533,17 @@ export default function App() {
       setLoadingProgress(20);
       setLoadingTitle("Step 1 of 4: Planning challenge structure...");
 
-      // Step 2-4: Generate Chunks (1-10, 11-20, 21-30)
-      const chunks = [
-        { start: 0, end: 10, progress: 45, title: "Step 2 of 4: Crafting Days 1-10..." },
-        { start: 10, end: 20, progress: 70, title: "Step 3 of 4: Mapping Days 11-20..." },
-        { start: 20, end: 30, progress: 95, title: "Step 4 of 4: Finalizing Days 21-30..." }
-      ];
+      // Step 2-4: Generate Chunks (in smaller batches to prevent Vercel timeouts)
+      const chunks = [];
+      const batchSize = 3;
+      for (let i = 0; i < 30; i += batchSize) {
+        chunks.push({
+          start: i,
+          end: Math.min(i + batchSize, 30),
+          progress: 20 + Math.floor((i / 30) * 80),
+          title: `Crafting Days ${i + 1}-${Math.min(i + batchSize, 30)} of 30...`
+        });
+      }
 
       for (const chunk of chunks) {
         setLoadingTitle(chunk.title);

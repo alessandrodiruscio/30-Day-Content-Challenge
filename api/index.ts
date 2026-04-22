@@ -386,6 +386,64 @@ post("/api/admin/reinit-db", async (req: any, res: any) => {
   }
 });
 
+import { 
+  generateOptions, 
+  generateSeries, 
+  generateSeriesChunk, 
+  generateDayContent, 
+  refineScript, 
+  regenerateDayContentWithIdea 
+} from "./geminiService";
+
+// Gemini API Routes
+post("/api/gemini/options", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { profile, language } = req.body;
+    const result = await generateOptions(profile, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+post("/api/gemini/series", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { concept, profile, language } = req.body;
+    const result = await generateSeries(concept, profile, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+post("/api/gemini/series-chunk", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { skeletonDays, profile, concept, language } = req.body;
+    const result = await generateSeriesChunk(skeletonDays, profile, concept, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+post("/api/gemini/day-content", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { dayTitle, dayDescription, profile, seriesHook, language } = req.body;
+    const result = await generateDayContent(dayTitle, dayDescription, profile, seriesHook, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+post("/api/gemini/refine-script", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { baseScript, newHook, audience, niche, language } = req.body;
+    const result = await refineScript(baseScript, newHook, audience, niche, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+post("/api/gemini/regenerate-day", authenticateToken, async (req: any, res: any) => {
+  try {
+    const { dayTitle, dayDescription, idea, profile, seriesHook, language } = req.body;
+    const result = await regenerateDayContentWithIdea(dayTitle, dayDescription, idea, profile, seriesHook, language);
+    res.json(result);
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
 // Community mock
 get("/api/community/membership", (req: any, res: any) => res.json({ isMember: false }));
 
