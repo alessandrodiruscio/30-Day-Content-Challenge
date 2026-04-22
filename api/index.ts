@@ -61,6 +61,16 @@ const del = (path: string, ...handlers: any[]) => {
 };
 
 // 3. Health Check
+app.use('/api', async (req, res, next) => {
+  try {
+    if (!dbInitialized) await initDb();
+    next();
+  } catch (error: any) {
+    console.error("[DB] Lifecycle Middleware Error:", error);
+    res.status(500).json({ error: "Database initialization failed", details: error.message });
+  }
+});
+
 get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
@@ -121,30 +131,55 @@ const getDbConfig = () => {
   };
 };
 
-let pool: mysql.Pool;
+let pool: mysql.Pool | null = null;
 let dbInitialized = false;
 
 const getPool = () => {
   if (!pool) {
+    console.log("[DB] Creating new connection pool...");
     const config = getDbConfig();
     if ((!process.env.DB_HOST || config.host === "127.0.0.1") && process.env.VERCEL) {
+      console.error("[DB] CRITICAL: DB_HOST is missing in Vercel environment.");
       throw new Error("DATABASE_CONFIG_ERROR: No DB_HOST provided.");
     }
     pool = mysql.createPool(config);
+    
+    // Add health probe to pool
+    pool.on('connection', (connection) => {
+      console.log('[DB] New connection acquired from pool');
+    });
+    
+    pool.on('error', (err) => {
+      console.error('[DB] Pool error:', err);
+      if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+        console.warn('[DB] Connection lost. Clearing pool cache.');
+        pool = null; // Next getPool() call will re-create it
+      }
+    });
   }
   return pool;
 };
 
-const initDb = async () => {
+const initDb = async (force = false) => {
+  if (dbInitialized && !force) return;
+  
   try {
+    console.log(`[DB] initializing... (Force: ${force})`);
     const db = getPool();
+    
+    // Test connection first
+    await db.query('SELECT 1');
+    console.log("[DB] Connection test successful.");
+
     await db.execute(`CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL, niche VARCHAR(255), products TEXT, problems TEXT, audience TEXT, tone VARCHAR(255), contentType VARCHAR(255), primaryCTA TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
     await db.execute(`CREATE TABLE IF NOT EXISTS strategies (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(255) NOT NULL, data LONGTEXT NOT NULL, start_date VARCHAR(255), completed_days TEXT, day_checklist TEXT, day_notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
     try { await db.execute('ALTER TABLE strategies MODIFY COLUMN data LONGTEXT NOT NULL'); } catch (e) {}
     await db.execute(`CREATE TABLE IF NOT EXISTS achievements (id INT AUTO_INCREMENT PRIMARY KEY, code VARCHAR(255) UNIQUE NOT NULL, name_en VARCHAR(255) NOT NULL, name_es VARCHAR(255) NOT NULL, description_en TEXT NOT NULL, description_es TEXT NOT NULL, icon VARCHAR(255) NOT NULL, tier VARCHAR(50) NOT NULL)`);
     await db.execute(`CREATE TABLE IF NOT EXISTS user_achievements (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, achievement_id INT NOT NULL, strategy_id INT, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY user_ach_at (user_id, achievement_id, strategy_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE, FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE)`);
+    
     const [rows]: any = await db.execute('SELECT COUNT(*) as count FROM achievements');
     if (rows[0].count === 0) {
+      console.log("[DB] Seeding default achievements...");
       const initialAchievements = [
         ['FIRST_STRATEGY', 'Strategic Visionary', 'Visionario Estratégico', 'First challenge.', 'Primer desafío.', 'Target', 'bronze'],
         ['WEEK_ONE', 'Week One Warrior', 'Guerrero de la Primera Semana', '7 days.', '7 días.', 'Zap', 'silver'],
@@ -155,9 +190,12 @@ const initDb = async () => {
         await db.execute('INSERT INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) VALUES (?, ?, ?, ?, ?, ?, ?)', ach);
       }
     }
-    console.log("Database initialized successfully.");
-  } catch (err) {
-    console.error("Database initialization CRITICAL FAILURE:", err);
+    
+    dbInitialized = true;
+    console.log("[DB] Initialization completed successfully.");
+  } catch (err: any) {
+    console.error("[DB] Initialization CRITICAL FAILURE:", err);
+    dbInitialized = false;
     throw err;
   }
 };
@@ -176,7 +214,6 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // 5. Routes
 post("/api/register", async (req: any, res: any) => {
   try {
-    if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
     const db = getPool();
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -190,7 +227,6 @@ post("/api/register", async (req: any, res: any) => {
 
 post("/api/login", async (req: any, res: any) => {
   try {
-    if (!dbInitialized) { await initDb(); dbInitialized = true; }
     const { email, password } = req.body;
     const db = getPool();
     const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
@@ -236,28 +272,48 @@ put("/api/profile", authenticateToken, async (req: any, res: any) => {
 get("/api/strategies", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
-    console.log(`[Strategies] Fetching for user ID: ${req.user.id}, Email: ${req.user.email}`);
+    const userId = Number(req.user.id);
+    console.log(`[Strategies] Requesting for UserID: ${userId} (Type: ${typeof userId}), Email: ${req.user.email}`);
     
-    const [rows]: any = await db.execute('SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
+    // Test if pool is active 
+    await db.query('SELECT 1');
     
-    console.log(`[Strategies] Found ${rows.length} strategies for user ${req.user.id}`);
+    const [rows]: any = await db.execute('SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at DESC', [userId]);
     
-    const mapped = rows.map((s: any) => ({
-      id: s.id, 
-      title: s.title, 
-      data: JSON.parse(s.data), 
-      start_date: s.start_date,
-      completed_days: JSON.parse(s.completed_days || '[]'),
-      day_checklist: JSON.parse(s.day_checklist || '{}'),
-      day_notes: JSON.parse(s.day_notes || '{}'),
-      created_at: s.created_at,
-      debug_user_id: req.user.id // Add this for frontend debugging
-    }));
+    console.log(`[Strategies] DB matched ${rows.length} rows for user ${userId}`);
+    
+    if (rows.length > 0) {
+      console.log(`[Strategies] Sample row user_id: ${rows[0].user_id} (Type: ${typeof rows[0].user_id})`);
+    }
 
+    const mapped = rows.map((s: any) => {
+      try {
+        return {
+          id: s.id, 
+          title: s.title, 
+          data: typeof s.data === 'string' ? JSON.parse(s.data) : s.data, 
+          start_date: s.start_date,
+          completed_days: typeof s.completed_days === 'string' ? JSON.parse(s.completed_days || '[]') : (s.completed_days || []),
+          day_checklist: typeof s.day_checklist === 'string' ? JSON.parse(s.day_checklist || '{}') : (s.day_checklist || {}),
+          day_notes: typeof s.day_notes === 'string' ? JSON.parse(s.day_notes || '{}') : (s.day_notes || {}),
+          created_at: s.created_at,
+          debug_user_id: userId
+        };
+      } catch (e: any) {
+        console.error(`[Strategies] Serialization error on strategy ${s.id}:`, e.message);
+        return null; // Skip corrupted ones
+      }
+    }).filter((s: any) => s !== null);
+
+    console.log(`[Strategies] Returning ${mapped.length} valid mapped strategies`);
     res.json(mapped);
   } catch (error: any) { 
-    console.error(`[Strategies] Error fetching for user ${req.user.id}:`, error);
-    res.status(500).json({ error: error.message }); 
+    console.error(`[Strategies] CRITICAL FETCH ERROR for user ${req.user?.id}:`, error);
+    res.status(500).json({ 
+      error: "Strategies fetch failed", 
+      details: error.message,
+      code: error.code 
+    }); 
   }
 });
 
@@ -312,6 +368,24 @@ get("/api/achievements", authenticateToken, async (req: any, res: any) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
+// Admin & Debug Routes
+post("/api/admin/reinit-db", async (req: any, res: any) => {
+  try {
+    // Basic protection (can be enhanced with a secret header)
+    const adminSecret = req.headers['x-admin-secret'];
+    if (process.env.ADMIN_SECRET && adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ error: "Unauthorized admin access" });
+    }
+
+    console.log("[Admin] Manual DB Re-initialization triggered.");
+    pool = null; // Clear existing pool
+    await initDb(true); // Force re-init
+    res.json({ success: true, message: "Database pool and schema re-initialized." });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Community mock
 get("/api/community/membership", (req: any, res: any) => res.json({ isMember: false }));
 
@@ -335,5 +409,10 @@ app.use('/api', (req, res) => {
   });
 });
 
-// 6. Export for Vercel
+// 6. Startup
+if (!process.env.VERCEL) {
+  initDb().catch(err => console.error("Immediate startup DB failure:", err));
+}
+
+// 7. Export for Vercel
 export default app;
