@@ -3,7 +3,7 @@ import type { UserProfile, SeriesConcept, ContentSeries } from "../src/types.js"
 
 // Initialize Gemini with the platform-provided API key
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
   }
@@ -52,7 +52,7 @@ export const generateOptions = async (profile: UserProfile, language: string = '
   - Required Tone: ${profile.tone}
   - Format/Style: ${profile.contentType}
   - Ultimate CTA: ${profile.primaryCTA}
-
+ 
   NEGATIVE CONSTRAINTS:
   - DO NOT provide generic content strategies.
   - DO NOT deviate from the topic: "${profile.niche}".
@@ -62,13 +62,13 @@ export const generateOptions = async (profile: UserProfile, language: string = '
   OUTPUT REQUIREMENTS:
   1. Each option must have a unique, niche-specific angle.
   2. The "Title" should be catchy but relevant.
-  3. The "Description" must clearly detail how this strategy builds authority. CRITICAL: You MUST format this field using markdown. Because you are outputting a JSON string, you MUST use explicit newline characters (\\n\\n) to separate paragraphs. You MUST use bullet points and bold text to ensure readability instead of a single wall of text!
+  3. The "Description" must clearly detail how this strategy builds authority (MAXIMUM 3 short paragraphs). CRITICAL: You MUST format this field using markdown. Use explicit newline characters (\\n\\n) to separate paragraphs. Use bullet points and bold text for readability instead of a single wall of text. KEEP IT CONCISE.
   4. The "Theme" must be a concise 3-5 word summary of the content pillar.
 
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a world-class Instagram Content Architect. Your expertise is in creating hyper-relevant, niche-specific 30-day challenges that convert views into authority. You never provide generic advice; you always deep-dive into the specific industry provided by the user.",
@@ -125,7 +125,7 @@ export const generateSeries = async (concept: SeriesConcept, profile: UserProfil
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       maxOutputTokens: 8192,
@@ -219,7 +219,7 @@ export const generateSeriesChunk = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Strategist. For every day, you MUST return 3 scripts (each with 7 paragraphs separated by \\n\\n) and 3 storyboard strings (each with 7 lines).",
@@ -279,7 +279,7 @@ export const generateDayContent = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Creator. Scripts MUST have 7 paragraphs separated by double newlines. Storyboards MUST have 7 lines.",
@@ -317,7 +317,7 @@ export const refineScript = async (baseScript: string, newHook: string, audience
     ${languageInstruction}`;
     
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a professional scriptwriter. Provide ONLY the refined script text."
@@ -365,7 +365,7 @@ export const regenerateDayContentWithIdea = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-lite-latest",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Strategist. For every day, you MUST return 3 scripts (each with exactly 7 paragraphs separated by \\n\\n) and 3 storyboard strings (each with exactly 7 lines).",

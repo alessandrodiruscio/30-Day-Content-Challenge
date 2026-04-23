@@ -3,6 +3,8 @@ import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { Resend } from "resend";
 import { 
   generateOptions, 
@@ -14,7 +16,20 @@ import {
 } from "./_geminiService.js";
 
 // 1. Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
+
+// FIX: Ensure the correct key is used in this environment by prioritizing our .env file.
+// This is necessary because some environments may inject a stale or invalid key.
+try {
+  const keyFile = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(keyFile)) {
+    const envContent = fs.readFileSync(keyFile, 'utf8');
+    const match = envContent.match(/^GEMINI_API_KEY=(.*)$/m);
+    if (match && match[1]) {
+      process.env.GEMINI_API_KEY = match[1].trim();
+    }
+  }
+} catch (e) {}
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
