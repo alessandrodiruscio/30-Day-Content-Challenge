@@ -852,39 +852,40 @@ export default function App() {
         <>
           {/* Header */}
           <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-zinc-100 shadow-signature">
-        <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer group transition-transform hover:scale-[1.02]" onClick={() => setStep('landing')}>
-            <div className="flex items-center gap-2">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex flex-col items-center justify-center relative overflow-hidden shadow-lg shadow-primary/10">
-                <div className="absolute top-0 left-0 right-0 h-2 bg-primary"></div>
-                <span className="text-[12px] font-black text-on-surface-variant mt-1.5 tracking-tighter">30</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 cursor-pointer group transition-transform hover:scale-[1.02]" onClick={() => setStep('landing')}>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/20 border border-primary/30 flex flex-col items-center justify-center relative overflow-hidden shadow-lg shadow-primary/10">
+                <div className="absolute top-0 left-0 right-0 h-1.5 sm:h-2 bg-primary"></div>
+                <span className="text-[10px] sm:text-[12px] font-black text-on-surface-variant mt-1.5 tracking-tighter">30</span>
               </div>
-              <div className="text-xl font-black text-on-surface tracking-tighter font-headline uppercase italic">
-                30-Day Content Challenge
+              <div className="text-sm sm:text-xl font-black text-on-surface tracking-tighter font-headline uppercase italic hidden min-[360px]:block">
+                <span className="sm:hidden">Content Challenge</span>
+                <span className="hidden sm:inline">30-Day Content Challenge</span>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3 sm:gap-8">
             <button
                onClick={toggleLanguage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary hover:bg-zinc-50 transition-all border border-zinc-200"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold text-on-surface-variant hover:text-primary hover:bg-zinc-50 transition-all border border-zinc-200"
               title="Switch language"
             >
               <span>{i18n.language === 'en' ? '🇺🇸' : '🇪🇸'}</span>
-              <span>{i18n.language === 'en' ? 'EN' : 'ES'}</span>
+              <span className="hidden sm:inline">{i18n.language === 'en' ? 'EN' : 'ES'}</span>
             </button>
             
             {user ? (
               <div className="relative">
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="flex items-center gap-3 pl-2 pr-4 py-2 bg-surface-container rounded-2xl hover:bg-surface-container-high transition-all group"
+                  className="flex items-center gap-2 pl-1 pr-3 sm:pl-2 sm:pr-4 py-1.5 sm:py-2 bg-surface-container rounded-2xl hover:bg-surface-container-high transition-all group"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
-                    {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
+                    {isMenuOpen ? <X size={16} className="sm:w-5 sm:h-5" /> : <Menu size={16} className="sm:w-5 sm:h-5" />}
                   </div>
-                  <span className="text-sm font-bold font-headline">{t('nav.account')}</span>
+                  <span className="text-xs sm:text-sm font-bold font-headline hidden sm:inline">{t('nav.account')}</span>
                 </button>
 
                 <AnimatePresence>
@@ -1344,24 +1345,24 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
   return (
     <div className="w-full">
       {/* Hero Section */}
-      <section className="relative overflow-hidden px-8 py-20 md:py-32 bg-surface-bright">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-16 items-center">
+      <section className="relative overflow-hidden px-5 sm:px-8 py-24 sm:py-32 bg-surface-bright">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 sm:gap-16 items-center">
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="relative z-10 text-left font-sans"
+            className="relative z-10 text-left font-sans mt-8 sm:mt-0"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary mb-6 sm:mb-8">
               <div className="flex-shrink-0 w-5 h-5 rounded bg-primary/20 flex flex-col items-center justify-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-primary"></div>
                 <span className="text-[8px] font-black text-primary mt-0.5 tracking-tighter">30</span>
               </div>
               <span className="text-[10px] font-black font-headline uppercase tracking-widest leading-none">30-Day Content Challenge</span>
             </div>
-            <h1 className="text-5xl md:text-7xl font-extrabold font-headline leading-[1.1] tracking-tight text-on-surface mb-8">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold font-headline leading-[1.1] tracking-tight text-on-surface mb-6 sm:mb-8">
               {t('landing.heading1')} <br/><span className="text-primary italic">{t('landing.heading2')}</span>
             </h1>
-            <p className="text-lg md:text-xl text-on-surface-variant max-w-lg mb-12 leading-relaxed font-body font-light">
+            <p className="text-base sm:text-lg md:text-xl text-on-surface-variant max-w-lg mb-8 sm:mb-12 leading-relaxed font-body font-light">
               {t('landing.description')}
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -1375,7 +1376,7 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
               {user && (
                 <button 
                   onClick={onSeeStrategies}
-                  className="bg-white border-[1.5px] border-surface-container-highest hover:bg-surface-container-low px-8 py-5 rounded-2xl font-bold text-lg transition-all"
+                  className="bg-white border-[1.5px] border-surface-container-highest hover:bg-surface-container-low px-8 py-4 sm:py-5 rounded-2xl font-bold text-lg transition-all"
                 >
                   {t('landing.viewStrategies')}
                 </button>
@@ -1386,20 +1387,20 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="relative"
+            className="relative mt-8 sm:mt-0"
           >
-            <div className="absolute -top-20 -right-20 w-96 h-96 bg-primary/10 blur-[100px] rounded-full"></div>
-            <div className="relative bg-white p-5 rounded-[3rem] signature-glow border border-surface-container-highest/50">
+            <div className="absolute -top-10 -right-10 sm:-top-20 sm:-right-20 w-64 h-64 sm:w-96 sm:h-96 bg-primary/10 blur-[100px] rounded-full"></div>
+            <div className="relative bg-white p-3 sm:p-5 rounded-[2.5rem] sm:rounded-[3rem] signature-glow border border-surface-container-highest/50">
               <img 
-                className="w-full h-auto rounded-[2.2rem] shadow-2xl" 
+                className="w-full h-auto rounded-[1.8rem] sm:rounded-[2.2rem] shadow-2xl" 
                 src="https://picsum.photos/seed/setup/1200/900" 
                 referrerPolicy="no-referrer"
                 alt="Production Setup"
               />
-              <div className="absolute -bottom-8 -left-8 bg-white p-8 rounded-3xl signature-glow border border-surface-container-highest max-w-[260px]">
-                <p className="text-primary font-black text-4xl mb-1 font-headline tracking-tighter">8.4M+</p>
-                <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest leading-none">Collective Views Secured</p>
-                <div className="mt-5 h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+              <div className="absolute -bottom-4 left-4 sm:-bottom-8 sm:-left-8 bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl signature-glow border border-surface-container-highest max-w-[200px] sm:max-w-[260px]">
+                <p className="text-primary font-black text-2xl sm:text-4xl mb-1 font-headline tracking-tighter">8.4M+</p>
+                <p className="text-[8px] sm:text-[10px] text-on-surface-variant font-bold uppercase tracking-widest leading-tight sm:leading-none">Collective Views Secured</p>
+                <div className="mt-3 sm:mt-5 h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: "85%" }}
@@ -1414,14 +1415,14 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
       </section>
 
       {/* How it Works Section */}
-      <section className="bg-surface-container-low py-32 px-8">
+      <section className="bg-surface-container-low py-20 sm:py-32 px-5 sm:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
+          <div className="text-center mb-16 sm:mb-20">
             <span className="text-secondary font-bold font-headline tracking-[0.3em] text-[10px] uppercase mb-4 block">Process</span>
-            <h2 className="text-4xl md:text-5xl font-black font-headline tracking-tight mb-8 font-headline italic uppercase">{t('landing.howItWorks')}</h2>
+            <h2 className="text-3xl md:text-5xl font-black font-headline tracking-tight mb-8 font-headline italic uppercase">{t('landing.howItWorks')}</h2>
           </div>
           
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-4 gap-6 sm:gap-8">
             {(() => {
               const steps = t('landing.steps', { returnObjects: true });
               const icons = [<UserIcon size={32} />, <Zap size={32} />, <FileText size={32} />, <Sparkles size={32} />];
@@ -1447,19 +1448,37 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
       </section>
 
       {/* Features Section */}
-      <section className="py-32 px-8 bg-white overflow-hidden">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-3 gap-10">
+      <section className="py-20 sm:py-32 px-5 sm:px-8 bg-white relative overflow-hidden">
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="text-center mb-16 px-4">
+            <span className="inline-block px-4 py-2 rounded-full bg-surface-container-low text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase mb-6 border border-surface-container-highest/50">
+              Your Unfair Advantage
+            </span>
+            <h2 className="text-3xl sm:text-4xl md:text-6xl font-black font-headline tracking-tighter leading-tight text-on-surface">
+              Engineered for <span className="text-primary italic">Growth</span>
+            </h2>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-6 sm:gap-10">
             {(() => {
               const features = t('landing.features', { returnObjects: true });
-              const icons = [<Target size={40} />, <Zap size={40} />, <Calendar size={40} />];
+              const icons = [<Target size={32} />, <Zap size={32} />, <Calendar size={32} />];
+              const accents = ["bg-indigo-50 text-indigo-600 border-indigo-100", "bg-emerald-50 text-emerald-600 border-emerald-100", "bg-amber-50 text-amber-600 border-amber-100"];
               return Array.isArray(features) ? features.map((v: any, i: number) => (
-                <div key={i} className="group relative bg-surface-container-low/30 p-12 rounded-[3.5rem] border border-surface-container-highest/10 transition-all hover:bg-white hover:shadow-signature hover:scale-[1.02]">
-                  <div className="mb-10 w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                    {icons[i]}
+                <div key={i} className="group relative bg-white p-10 md:p-12 rounded-[2.5rem] border border-surface-container shadow-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 hover:-translate-y-2 overflow-hidden flex flex-col justify-between">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-surface-container-lowest/50 to-transparent rounded-bl-[100px] -z-10 transition-transform duration-500 group-hover:scale-110"></div>
+                  
+                  <div>
+                    <div className={cn("mb-8 w-14 h-14 rounded-[1.25rem] flex items-center justify-center border shadow-sm transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3", accents[i])}>
+                      {icons[i]}
+                    </div>
+                    <h3 className="text-2xl font-black mb-4 font-headline tracking-tight text-on-surface">{v.title}</h3>
+                    <p className="text-on-surface-variant leading-relaxed font-body text-pretty">{v.desc}</p>
                   </div>
-                  <h3 className="text-2xl font-black mb-6 font-headline tracking-tight italic uppercase">{v.title}</h3>
-                  <p className="text-on-surface-variant leading-relaxed font-body font-light opacity-80">{v.desc}</p>
+                  
+                  <div className="mt-10 flex items-center text-[10px] font-black uppercase tracking-widest text-primary opacity-0 -translate-x-4 transition-all duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+                    Explore Feature <ArrowRight size={14} className="ml-2" />
+                  </div>
                 </div>
               )) : null;
             })()}
@@ -1468,15 +1487,37 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
       </section>
 
       {/* Quote Section */}
-      <section className="py-32 px-8 bg-surface-bright text-center">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-10 text-primary opacity-20">
-            <span className="text-8xl font-serif">"</span>
-          </div>
-          <h2 className="text-3xl md:text-5xl font-black font-headline tracking-tight leading-tight mb-12 italic">
-            {t('landing.quote')}
-          </h2>
-          <div className="w-20 h-1 bg-primary/20 mx-auto rounded-full"></div>
+      <section className="py-24 sm:py-32 md:py-48 px-5 sm:px-8 bg-on-surface relative overflow-hidden flex items-center justify-center">
+        {/* Abstract Background Elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px]"></div>
+          <div className="absolute top-[60%] -right-[10%] w-[40%] h-[60%] rounded-full bg-secondary/10 blur-[120px]"></div>
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
+        </div>
+        
+        <div className="max-w-5xl mx-auto relative z-10 text-center">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            whileInView={{ scale: 1, opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="flex flex-col items-center"
+          >
+            <div className="w-16 h-16 md:w-20 md:h-20 bg-surface-container/10 border border-surface-container/20 rounded-full flex items-center justify-center mb-10 md:mb-12 backdrop-blur-md">
+               <svg width="24" height="24" md:width="32" md:height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white/80 scale-125 md:scale-150">
+                 <path d="M10 11L8 15H11V19H5V11L7 7H10L10 11ZM20 11L18 15H21V19H15V11L17 7H20L20 11Z" fill="currentColor"/>
+               </svg>
+            </div>
+            
+            <h2 className="text-3xl md:text-5xl lg:text-7xl font-black font-headline tracking-tighter leading-[1.1] mb-12 text-white italic text-pretty">
+              {t('landing.quote')}
+            </h2>
+            
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-1 w-12 bg-primary rounded-full"></div>
+              <p className="text-surface-container-highest font-black font-headline tracking-[0.2em] uppercase text-[10px]">The Vision</p>
+            </div>
+          </motion.div>
         </div>
       </section>
 
