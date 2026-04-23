@@ -198,9 +198,9 @@ export const generateSeriesChunk = async (
   For each of the 3 hooks, you MUST provide:
   1. A SCRIPT with EXACTLY 7 paragraphs. 
      LENGTH: 160-200 words per script (ensure high detail and deep value).
-     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\n\n). 
+     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
      STRUCTURE: Hook, Relate, Transition, Struggle, Lesson, Result, CTA.
-     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\n\n). 
+     CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
      The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment a specific keyword to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
      NO LABELS (like "Hook:" or "1."). Just the raw text.
   2. A STORYBOARD with EXACTLY 7 lines (one creator action per script section). 
@@ -265,13 +265,13 @@ export const generateDayContent = async (
   SELECTED HOOK: "${selectedHook}"
 
   REQUIREMENTS:
-  1. SCRIPT: 7-part structure (Hook, Relate, Transition, Struggle, Lesson, CTA, Result).
+  1. SCRIPT: 7-part structure (Hook, Relate, Transition, Struggle, Lesson, Result, CTA).
      LENGTH: 160-200 words (deep dive into the topic).
-     STRUCTURE: Hook, Relate, Transition, Struggle, Lesson, Result, CTA.
-     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\n\n). 
+     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
+     CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
      The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment a specific keyword to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
      DO NOT include labels like 'Hook:'. Just the content.
-  2. STORYBOARD: EXACTLY 7 creator actions, separated by single newlines (\n).
+  2. STORYBOARD: EXACTLY 7 creator actions, separated by single newlines (\\n).
   3. CAPTION: Engaging Instagram caption.
 
   ${languageInstruction}`;

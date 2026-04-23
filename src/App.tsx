@@ -556,7 +556,7 @@ export default function App() {
 
       // Step 2-4: Generate Chunks (in smaller batches)
       const chunks = [];
-      const batchSize = 3;
+      const batchSize = 5; // Generate 5 days at a time to reduce load times
       
       const genericTitles = [
         "Drafting initial video hooks...",
@@ -574,8 +574,8 @@ export default function App() {
         });
       }
 
-      // Generate the first 3 chunks (9 days) synchronously to show the calendar quickly
-      const numInitialChunks = 3;
+      // Generate the first 1 chunk (5 days) synchronously to show the calendar quickly
+      const numInitialChunks = 1;
       for (let idx = 0; idx < numInitialChunks; idx++) {
         const chunk = chunks[idx];
         setLoadingTitle(genericTitles[idx]);
@@ -3074,6 +3074,23 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
           <span>Calendar View</span>
         </button>
       </div>
+      
+      {/* Background generation banner (shows if any day is currently generating) */}
+      {series.days.some((d: any) => !d.scripts || d.scripts.length === 0 || d.scripts[0] === "") && (
+        <motion.div
+           initial={{ opacity: 0, y: -10 }}
+           animate={{ opacity: 1, y: 0 }}
+           className="mb-8 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex flex-col sm:flex-row items-center gap-4 shadow-sm"
+        >
+           <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+             <Loader2 className="animate-spin text-indigo-600" size={20} />
+           </div>
+           <div className="flex-1">
+             <h4 className="font-bold text-indigo-900">Your initial content is ready!</h4>
+             <p className="text-sm text-indigo-800">We've opened the calendar with the first batch of days so you can start right away. The remaining strategy is currently being composed by the AI in the background.</p>
+           </div>
+        </motion.div>
+      )}
 
       {detailViewMode === 'calendar' ? (
         <motion.div
