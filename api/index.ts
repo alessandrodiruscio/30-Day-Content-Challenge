@@ -250,6 +250,96 @@ post("/api/login", async (req: any, res: any) => {
   }
 });
 
+post("/api/forgot-password", async (req: any, res: any) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+    
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    
+    if (rows.length === 0) {
+      // Don't reveal that the user doesn't exist for security reasons
+      return res.json({ success: true });
+    }
+    
+    const user = rows[0];
+    
+    // Create a temporary token that expires in 1 hour
+    // Include password hash in secret so if password changes, token is invalidated
+    const resetSecret = JWT_SECRET + user.password;
+    const resetToken = jwt.sign({ id: user.id, email: user.email }, resetSecret, { expiresIn: '1h' });
+    
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/?step=reset-password&token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+    if (!process.env.RESEND_API_KEY) {
+      console.warn("RESEND_API_KEY is not defined. Attempting fallback print.");
+      console.log(`[Password Reset] URL for ${user.email}:\n${resetUrl}`);
+      return res.json({ success: true, fake: true });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || "Content Challenge App <onboarding@resend.dev>",
+      to: user.email,
+      subject: "Reset Your Password - Content Challenge",
+      html: `
+        <h2>Password Reset Request</h2>
+        <p>You requested a password reset for your 30-Day Content Challenge account.</p>
+        <p>Click the link below to reset your password. This link is valid for 1 hour.</p>
+        <p><a href="${resetUrl}"><strong>Reset My Password</strong></a></p>
+        <p>If you did not request this, please ignore this email.</p>
+        <p>Alternatively, copy and paste this URL into your browser:</p>
+        <p>${resetUrl}</p>
+      `
+    });
+
+    if (error) {
+      console.error("Resend error:", error);
+      return res.status(500).json({ error: "Failed to send reset email." });
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ error: error.message || "Failed to process request" });
+  }
+});
+
+post("/api/reset-password", async (req: any, res: any) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: "Missing required fields" });
+    
+    // Decode token to get the email (without verifying yet) to pull the user record
+    const decoded = jwt.decode(token) as { email?: string };
+    if (!decoded || !decoded.email) {
+       return res.status(400).json({ error: "Invalid token format" });
+    }
+    
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT * FROM users WHERE email = ?', [decoded.email]);
+    if (rows.length === 0) return res.status(400).json({ error: "User not found" });
+    
+    const user = rows[0];
+    const resetSecret = JWT_SECRET + user.password;
+    
+    try {
+      jwt.verify(token, resetSecret);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid or expired reset token. Please request a new one." });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await db.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: error.message || "Failed to reset password" });
+  }
+});
+
 get("/api/me", authenticateToken, async (req: any, res: any) => {
   try {
     const db = getPool();
@@ -458,7 +548,7 @@ post("/api/report-bug", async (req: any, res: any) => {
     const resend = new Resend(process.env.RESEND_API_KEY);
     
     const { data, error } = await resend.emails.send({
-      from: "Content Challenge App <onboarding@resend.dev>", // Resend test email
+      from: process.env.RESEND_FROM_EMAIL || "Content Challenge App <onboarding@resend.dev>", // Resend test email
       to: "alex@alessandrodiruscio.com",
       subject: `New Bug Report from ${name}`,
       html: `
@@ -472,7 +562,8 @@ post("/api/report-bug", async (req: any, res: any) => {
     });
 
     if (error) {
-      return res.status(500).json({ error: error.message });
+      console.error("[Bug Report] Resend API Error:", error);
+      return res.status(500).json({ error: error.message || "Resend API rejected the email." });
     }
 
     res.json({ success: true, data });
