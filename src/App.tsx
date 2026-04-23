@@ -3280,10 +3280,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
         <button
           onClick={() => setDetailViewMode('calendar')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all",
+            "flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black font-headline uppercase tracking-widest transition-all",
             detailViewMode === 'calendar'
-              ? "bg-brand-primary text-white shadow-sm"
-              : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              ? "bg-primary text-white shadow-elegant signature-glow"
+              : "border border-surface-container-highest text-on-surface-variant hover:bg-surface-container"
           )}
         >
           <Grid3X3 size={15} />
@@ -3395,17 +3395,18 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-12">
         {/* Left Column: Sidebar Navigation */}
         <div className="lg:col-span-4 space-y-4 md:space-y-8">
-          <div className="p-4 md:p-8 rounded-2xl md:rounded-[2rem] bg-brand-primary text-white shadow-2xl shadow-brand-primary/20">
-            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">{series.title}</h2>
-            <p className="text-white/60 leading-relaxed mb-6">{series.description}</p>
-            <div className="flex items-center gap-4 text-white/80 font-semibold">
-              <div className="flex items-center gap-2">
-                <Instagram size={20} />
-                <span>{t('detail.seriesLabel')}</span>
+          <div className="p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] bg-on-surface text-white shadow-elegant shadow-black/20 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+            <h2 className="text-2xl md:text-3xl font-black font-headline mb-4 tracking-tighter">{series.title}</h2>
+            <p className="text-white/60 leading-relaxed mb-8 font-body font-light italic">{series.description}</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+                <span className="text-primary font-black font-headline uppercase tracking-widest text-[10px]">{completedDays.length}/30 days completed</span>
               </div>
               {startDate && (
-                <div className="flex items-center gap-2 text-white/60 text-sm">
-                  <Calendar size={16} />
+                <div className="flex items-center gap-2 text-white/50 text-xs">
+                  <Calendar size={14} />
                   <span>{t('detail.starts')} {startDate.toLocaleDateString()}</span>
                 </div>
               )}
