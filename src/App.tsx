@@ -37,6 +37,7 @@ import {
   Trash2,
   ExternalLink,
   LayoutGrid,
+  Bug,
   Image as ImageIcon,
   BookOpen,
   Grid3X3,
@@ -413,6 +414,11 @@ export default function App() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingTitle, setLoadingTitle] = useState('');
 
+  // Bug Report State
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+  const [bugMessage, setBugMessage] = useState("");
+  const [bugStatus, setBugStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
   // Safeguard against closing the tab while background generation is running
   const isGeneratingContent = 
     step === 'loading_options' || 
@@ -437,9 +443,9 @@ export default function App() {
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
           if (prev >= 90) return prev; // Cap fluid simulation at 90%
-          // Greatly slowed down so it doesn't hit the 90% "COMPLETING..." state too fast.
+          // Speed up the progress bar so it reaches ~90% in about 15 seconds.
           // 250ms interval = 4 ticks/sec.
-          const stepAmount = prev < 40 ? 0.2 : prev < 70 ? 0.1 : prev < 85 ? 0.05 : 0.02;
+          const stepAmount = prev < 40 ? 2.5 : prev < 70 ? 1.5 : prev < 85 ? 0.8 : 0.4;
           return prev + stepAmount;
         });
       }, 250);
@@ -497,6 +503,33 @@ export default function App() {
   }, []);
 
   const handleOpenKeySelector = () => {};
+
+  const handleBugSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bugMessage.trim()) return;
+    
+    setBugStatus("sending");
+    try {
+      const res = await fetch('/api/report-bug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: user?.name || user?.email?.split('@')[0] || "User",
+          email: user?.email || "Unknown",
+          message: bugMessage
+        })
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      setBugStatus("sent");
+      setTimeout(() => {
+        setIsBugReportOpen(false);
+        setBugStatus("idle");
+        setBugMessage("");
+      }, 3000);
+    } catch {
+      setBugStatus("error");
+    }
+  };
 
   const handleGeminiError = (err: any) => {
     console.error("Gemini Error:", err);
@@ -904,6 +937,17 @@ export default function App() {
                         <span className="font-medium">{t('nav.profileSettings')}</span>
                       </button>
 
+                      <button 
+                        onClick={() => {
+                          setIsBugReportOpen(true);
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-6 py-3 text-zinc-600 hover:bg-zinc-50 hover:text-brand-primary transition-colors text-left"
+                      >
+                        <Bug size={18} />
+                        <span className="font-medium">Report a Bug</span>
+                      </button>
+
                       <div className="h-px bg-zinc-50 my-2" />
 
                       <button 
@@ -1182,6 +1226,95 @@ export default function App() {
                   </button>
                 </div>
               </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isBugReportOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsBugReportOpen(false)}
+                className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
+              />
+              <motion.form
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                onSubmit={handleBugSubmit}
+                className="relative w-full max-w-lg bg-white rounded-[2rem] p-6 md:p-8 shadow-2xl border border-zinc-100 overflow-hidden flex flex-col"
+              >
+                <div className="absolute top-0 left-0 right-0 h-2 bg-brand-primary" />
+                
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary">
+                      <Bug size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl md:text-2xl font-bold font-headline tracking-tight text-on-surface">Report a Bug</h3>
+                      <p className="text-sm font-light text-on-surface-variant">We'll look into it right away.</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setIsBugReportOpen(false)} className="p-2 text-zinc-400 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 rounded-full transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                {bugStatus === 'sent' ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                      <CheckCircle2 size={32} />
+                    </div>
+                    <h4 className="text-xl font-bold text-on-surface mb-2">Report Sent!</h4>
+                    <p className="text-on-surface-variant font-light">Thank you. We'll fix this issue as soon as possible.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-sm font-semibold text-on-surface mb-2">Message</label>
+                        <textarea 
+                          value={bugMessage}
+                          onChange={(e) => setBugMessage(e.target.value)}
+                          placeholder="Please describe exactly what happened and how we can reproduce the issue..."
+                          required
+                          className="w-full bg-surface-container rounded-2xl p-4 min-h-[160px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-brand-primary/30 transition-all resize-none shadow-inner border border-transparent focus:border-brand-primary/20"
+                        />
+                      </div>
+                      
+                      {bugStatus === 'error' && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium">
+                          Failed to send report. Please try again or email us directly.
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="mt-8 pt-6 border-t border-zinc-100 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsBugReportOpen(false)}
+                        className="px-6 py-3 font-semibold text-on-surface-variant hover:text-on-surface hover:bg-zinc-100 rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={bugStatus === 'sending' || !bugMessage.trim()}
+                        className="px-8 py-3 bg-on-surface text-white hover:bg-brand-primary rounded-xl font-semibold transition-colors disabled:opacity-50 flex items-center justify-center min-w-[120px] tracking-wide"
+                      >
+                        {bugStatus === 'sending' ? (
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          "Send Report"
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </motion.form>
             </div>
           )}
         </AnimatePresence>

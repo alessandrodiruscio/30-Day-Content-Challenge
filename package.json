@@ -33,6 +33,7 @@
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.4",
     "react-markdown": "^10.1.0",
+    "resend": "^6.12.2",
     "tailwind-merge": "^3.5.0",
     "tsx": "^4.21.0",
     "vite": "^6.2.0"

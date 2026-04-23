@@ -3,6 +3,7 @@ import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import { Resend } from "resend";
 import { 
   generateOptions, 
   generateSeries, 
@@ -441,6 +442,43 @@ post("/api/gemini/regenerate-day", authenticateToken, async (req: any, res: any)
     const result = await regenerateDayContentWithIdea(dayTitle, dayDescription, idea, profile, seriesHook, language);
     res.json(result);
   } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+// Report Bug Route
+post("/api/report-bug", async (req: any, res: any) => {
+  try {
+    const { name, email, message } = req.body;
+    
+    if (!process.env.RESEND_API_KEY) {
+      console.warn("RESEND_API_KEY is not defined. Attempting fallback print.");
+      console.log(`[Bug Report] From: ${name} <${email}>\n${message}`);
+      return res.json({ success: true, fake: true });
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    const { data, error } = await resend.emails.send({
+      from: "Content Challenge App <onboarding@resend.dev>", // Resend test email
+      to: "alex@alessandrodiruscio.com",
+      subject: `New Bug Report from ${name}`,
+      html: `
+        <h2>New Bug Report received</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <hr />
+        <p><strong>Message:</strong></p>
+        <p>${message.replace(/\n/g, "<br/>")}</p>
+      `
+    });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, data });
+  } catch (error: any) { 
+    res.status(500).json({ error: error.message }); 
+  }
 });
 
 // Community mock
