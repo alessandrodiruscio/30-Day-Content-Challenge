@@ -357,7 +357,7 @@ function Confetti() {
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
-  const resetStep = searchParams.get('step') === 'reset_password';
+  const resetStep = searchParams.get('step') === 'reset_password' || searchParams.get('step') === 'reset-password';
   const initialResetToken = searchParams.get('token') || '';
   const { t, i18n } = useTranslation();
   const toggleLanguage = () => {
@@ -443,12 +443,12 @@ export default function App() {
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
           if (prev >= 90) return prev; // Cap fluid simulation at 90%
-          // Speed up the progress bar so it reaches ~90% in about 15 seconds.
-          // 250ms interval = 4 ticks/sec.
-          const stepAmount = prev < 40 ? 2.5 : prev < 70 ? 1.5 : prev < 85 ? 0.8 : 0.4;
+          // Speed up the progress bar so it safely approaches 90% over a much longer period.
+          // 400ms interval
+          const stepAmount = prev < 30 ? 1.0 : prev < 60 ? 0.5 : prev < 80 ? 0.2 : 0.08;
           return prev + stepAmount;
         });
-      }, 250);
+      }, 400);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -580,6 +580,7 @@ export default function App() {
 
     try {
       const results = await generateOptions(profile, i18n.language);
+      
       if (!results || results.length === 0) {
         throw new Error("No concepts were generated. Please try again.");
       }
@@ -982,7 +983,7 @@ export default function App() {
           {step === 'auth' && (
             <AuthView 
               key="auth" 
-              initialMode={new URLSearchParams(window.location.search).get('step') === 'forgot_password' ? 'forgot' : 'login'}
+              initialMode={(new URLSearchParams(window.location.search).get('step') === 'forgot_password' || new URLSearchParams(window.location.search).get('step') === 'forgot-password') ? 'forgot' : 'login'}
               onSuccess={(t, u) => {
                 setToken(t);
                 setUser(u);
@@ -1911,7 +1912,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
       const data = await safeJson(res);
       if (res.ok) {
         if (mode === 'forgot') {
-          setSuccessMessage(data.message);
+          setSuccessMessage(data.message || t('resetPassword.successDesc', 'If an account matches that email, a password reset link has been sent.'));
         } else {
           onSuccess(data.token, data.user);
         }
