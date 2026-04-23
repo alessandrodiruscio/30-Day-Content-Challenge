@@ -201,7 +201,8 @@ export const generateSeriesChunk = async (
      MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
      STRUCTURE: Hook, Relate, Transition, Struggle, Lesson, Result, CTA.
      CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
-     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment a specific keyword to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment the word [KEYWORD] to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     CRITICAL INSTRUCTION FOR CTA KEYWORD: You must invent ONE single, simple, uppercase keyword (e.g., "JOIN", "GROWTH", "LINKS", "MASTERCLASS") related to the offer and use this EXACT SAME keyword consistently in the CTA of EVERY single script you generate. Do not change the keyword across different days or hooks.
      NO LABELS (like "Hook:" or "1."). Just the raw text.
   2. A STORYBOARD with EXACTLY 7 lines (one creator action per script section). 
      MANDATORY: Separate with a SINGLE NEWLINE.
@@ -269,7 +270,8 @@ export const generateDayContent = async (
      LENGTH: 160-200 words (deep dive into the topic).
      MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
      CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
-     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment a specific keyword to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment the word [KEYWORD] to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     CRITICAL INSTRUCTION FOR CTA KEYWORD: You must invent ONE single, simple, uppercase keyword (e.g., "JOIN", "GROWTH", "LINKS", "MASTERCLASS") related to the offer and use this EXACT SAME keyword consistently in the CTA of EVERY single script you generate. Do not change the keyword across different days or hooks.
      DO NOT include labels like 'Hook:'. Just the content.
   2. STORYBOARD: EXACTLY 7 creator actions, separated by single newlines (\\n).
   3. CAPTION: Engaging Instagram caption.
@@ -350,8 +352,10 @@ export const regenerateDayContentWithIdea = async (
   2. For EACH hook, generate a HIGH-DETAIL SCRIPT (160-200 words).
      REQUIREMENTS: EXACTLY 7 paragraphs.
      STRUCTURE: Hook, Relate, Transition, Struggle, Lesson, Result, CTA.
-     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\n\n). 
-     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment a specific keyword to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
+     CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
+     The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment the word [KEYWORD] to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
+     CRITICAL INSTRUCTION FOR CTA KEYWORD: You must use the EXACT SAME keyword for the CTA consistently.
      NO LABELS (like "Hook:" or "1."). Just the raw text.
   3. For EACH hook, generate a STORYBOARD (exactly 7 lines, one creator action per script section).
      MANDATORY: Separate with a SINGLE NEWLINE.

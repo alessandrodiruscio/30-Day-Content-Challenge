@@ -1661,13 +1661,13 @@ function LoadingView({ title, showPercentage = false, progress: forcedProgress =
         <div className="w-full max-w-sm mb-6">
           <div className="flex justify-between items-center mb-3">
             <span className="text-xs font-black text-on-surface-variant uppercase tracking-widest opacity-60">{t('loading.progress')}</span>
-            {displayProgress >= 99 ? (
+            {displayProgress >= 90 ? (
               <motion.span 
                 animate={{ opacity: [1, 0.3, 1] }}
                 transition={{ duration: 1.2, repeat: Infinity }}
                 className="text-xs font-black text-primary uppercase tracking-widest"
               >
-                {t('loading.refining')}
+                COMPLETING STRATEGY...
               </motion.span>
             ) : (
               <span className="text-xs font-black text-primary uppercase tracking-widest">{Math.round(displayProgress)}%</span>
@@ -3717,32 +3717,25 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                               const storyboardLines = displayVisuals.split('\n').filter(l => l.trim());
                               const storyboardForParagraph = storyboardLines[idx] || (storyboardLines.length > 0 ? storyboardLines[0] : "");
                               
-                              const isCtaCheck = (p: string) => {
-                                  const l = p.toLowerCase();
-                                  return l.includes('comment "') || l.includes("comment '") || (l.includes('comment ') && l.includes('below')) || l.includes('dm me');
-                              };
-                              const isCTA = isCtaCheck(paragraph);
-                              const nonCtaIdx = scriptParts.slice(0, idx).filter((p: string) => !isCtaCheck(p)).length;
+                              const sl = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT', '📲 CALL TO ACTION'];
+                              const bg = ['bg-purple-50', 'bg-blue-50', 'bg-amber-50', 'bg-orange-50', 'bg-green-50', 'bg-emerald-50', 'bg-rose-50'];
+                              const tc = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900', 'text-rose-900'];
+                              const tbg = ['bg-purple-500', 'bg-blue-500', 'bg-amber-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500', 'bg-rose-500'];
                               
-                              let sectionLabel, bgColor, textColor, tagBgColor;
-                              
-                              if (isCTA) {
-                                  sectionLabel = '📲 CALL TO ACTION';
-                                  bgColor = 'bg-rose-50';
-                                  textColor = 'text-rose-900';
-                                  tagBgColor = 'bg-rose-500';
-                              } else {
-                                  const sl = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT'];
-                                  const bg = ['bg-purple-50', 'bg-blue-50', 'bg-amber-50', 'bg-orange-50', 'bg-green-50', 'bg-emerald-50'];
-                                  const tc = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900'];
-                                  const tbg = ['bg-purple-500', 'bg-blue-500', 'bg-amber-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500'];
-                                  
-                                  const cur = Math.min(nonCtaIdx, sl.length - 1);
-                                  sectionLabel = sl[cur];
-                                  bgColor = bg[cur];
-                                  textColor = tc[cur];
-                                  tagBgColor = tbg[cur];
+                              // Use the index directly, capping at 6 (Call to Action)
+                              // If it's the very last paragraph and there are fewer than 7, force it to be CTA
+                              let cur = Math.min(idx, 6);
+                              if (idx === scriptParts.length - 1 && scriptParts.length < 7) {
+                                  cur = 6;
                               }
+                              if (idx > 6) {
+                                  cur = 6;
+                              }
+                              
+                              const sectionLabel = sl[cur];
+                              const bgColor = bg[cur];
+                              const textColor = tc[cur];
+                              const tagBgColor = tbg[cur];
 
                               return (
                                 <div key={idx} className="space-y-4">
@@ -3883,31 +3876,19 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                                       const storyboardLines = displayVisuals.split('\n').filter(l => l.trim());
                                       const storyboardForParagraph = storyboardLines[idx] || (storyboardLines.length > 0 ? storyboardLines[0] : "");
                                       
-                                      const isCtaCheck = (p: string) => {
-                                          const l = p.toLowerCase();
-                                          return l.includes('comment "') || l.includes("comment '") || (l.includes('comment ') && l.includes('below')) || l.includes('dm me');
-                                      };
-                                      const isCTA = isCtaCheck(paragraph);
-                                      const nonCtaIdx = splitParts.slice(0, idx).filter((p: string) => !isCtaCheck(p)).length;
+                                      const sl = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT', '📲 CALL TO ACTION'];
+                                      const bg = ['bg-purple-50', 'bg-blue-50', 'bg-amber-50', 'bg-orange-50', 'bg-green-50', 'bg-emerald-50', 'bg-rose-50'];
+                                      const tc = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900', 'text-rose-900'];
+                                      const tbg = ['bg-purple-500', 'bg-blue-500', 'bg-amber-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500', 'bg-rose-500'];
                                       
-                                      let sectionLabel, bgColor, textColor, tagBgColor;
+                                      let cur = Math.min(idx, 6);
+                                      if (idx === splitParts.length - 1 && splitParts.length < 7) cur = 6;
+                                      if (idx > 6) cur = 6;
                                       
-                                      if (isCTA) {
-                                        sectionLabel = '📲 CALL TO ACTION';
-                                        bgColor = 'bg-rose-50';
-                                        textColor = 'text-rose-900';
-                                        tagBgColor = 'bg-rose-500';
-                                      } else {
-                                        const sl = ['🎣 HOOK', '🤝 RELATE & SET UP THE PROBLEM', '💡 THE TURNING POINT', '⚡ THE STRUGGLE', '🎯 THE BIG LESSON', '✅ THE RESULT'];
-                                        const bg = ['bg-purple-50', 'bg-blue-50', 'bg-amber-50', 'bg-orange-50', 'bg-green-50', 'bg-emerald-50'];
-                                        const tc = ['text-purple-900', 'text-blue-900', 'text-amber-900', 'text-orange-900', 'text-green-900', 'text-emerald-900'];
-                                        const tbg = ['bg-purple-500', 'bg-blue-500', 'bg-amber-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500'];
-                                        const cur = Math.min(nonCtaIdx, sl.length - 1);
-                                        sectionLabel = sl[cur];
-                                        bgColor = bg[cur];
-                                        textColor = tc[cur];
-                                        tagBgColor = tbg[cur];
-                                      }
+                                      const sectionLabel = sl[cur];
+                                      const bgColor = bg[cur];
+                                      const textColor = tc[cur];
+                                      const tagBgColor = tbg[cur];
                                       
                                       return (
                                         <div key={idx} className={`p-4 rounded-xl ${bgColor} border-l-4 ${textColor.replace('text-', 'border-')}`}>
