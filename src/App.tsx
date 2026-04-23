@@ -2362,40 +2362,40 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {options.map((option, i) => (
           <motion.div
             key={i}
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: i * 0.1 }}
-            className="card-prestige p-12 cursor-pointer relative group flex flex-col min-h-[440px] bg-white hover:shadow-signature transition-all duration-500"
+            className="card-prestige p-8 md:p-10 cursor-pointer relative group flex flex-col min-h-[400px] bg-white hover:shadow-signature transition-all duration-500"
             onClick={() => onSelect(option)}
           >
-            <div className="absolute top-10 right-10 w-14 h-14 rounded-2xl bg-surface-container flex items-center justify-center text-on-surface-variant/30 group-hover:bg-primary group-hover:text-white group-hover:rotate-12 transition-all duration-500">
-              <ArrowRight size={28} />
+            <div className="absolute top-8 right-8 w-12 h-12 rounded-2xl bg-surface-container flex items-center justify-center text-on-surface-variant/30 group-hover:bg-primary group-hover:text-white group-hover:rotate-12 transition-all duration-500">
+              <ArrowRight size={24} />
             </div>
             
-            <div className="flex-grow mb-12">
-              <span className="inline-block px-4 py-1.5 bg-primary/5 text-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-8">
+            <div className="flex-grow mb-8">
+              <span className="inline-block px-4 py-1.5 bg-primary/5 text-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-4">
                 {t('results.option')} {i + 1}
               </span>
-              <h3 className="text-3xl font-black font-headline leading-tight mb-8 group-hover:text-primary transition-colors tracking-tight">{option.title}</h3>
-              <div className="text-on-surface-variant leading-relaxed font-body font-light opacity-70 markdown-body">
+              <h3 className="text-2xl font-black font-headline leading-tight mb-5 group-hover:text-primary transition-colors tracking-tight">{option.title}</h3>
+              <div className="text-on-surface leading-relaxed font-body markdown-body text-sm sm:text-base">
                 <Markdown>{option.description}</Markdown>
               </div>
             </div>
 
-            <div className="pt-10 border-t border-surface-container-highest/20 flex flex-col gap-5">
-              <div className="flex items-center gap-5 text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-60">
+            <div className="pt-6 border-t border-surface-container-highest/20 flex flex-col gap-4">
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-80">
                 <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30">
-                  <Target size={20} />
+                  <Target size={18} />
                 </div>
                 <span>{option.targetAudience}</span>
               </div>
-              <div className="flex items-center gap-5 text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-60">
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-80">
                 <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30">
-                  <Sparkles size={20} />
+                  <Sparkles size={18} />
                 </div>
                 <span>{option.theme}</span>
               </div>
