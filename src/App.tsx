@@ -420,7 +420,10 @@ export default function App() {
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
           if (prev >= 90) return prev; // Cap fluid simulation at 90%
-          const stepAmount = prev < 30 ? 0.8 : prev < 60 ? 0.4 : prev < 80 ? 0.2 : 0.05;
+          // Need to reach ~90% in ~45 seconds. 
+          // 250ms interval = 4 ticks/sec. 45 secs = 180 ticks.
+          // 90 / 180 = 0.5% per tick. Let's make it slighty slower initially and gradually slow down.
+          const stepAmount = prev < 40 ? 0.6 : prev < 70 ? 0.3 : prev < 85 ? 0.15 : 0.05;
           return prev + stepAmount;
         });
       }, 250);
@@ -554,19 +557,28 @@ export default function App() {
       // Step 2-4: Generate Chunks (in smaller batches)
       const chunks = [];
       const batchSize = 3;
+      
+      const genericTitles = [
+        "Drafting initial video hooks...",
+        "Writing scripts and captions...",
+        "Formatting calendar structure...",
+        "Polishing daily call-to-actions..."
+      ];
+      
       for (let i = 0; i < 30; i += batchSize) {
         chunks.push({
           start: i,
           end: Math.min(i + batchSize, 30),
           progress: 20 + Math.floor((i / 30) * 80),
-          title: `Crafting Days ${i + 1}-${Math.min(i + batchSize, 30)} of 30...`
+          title: genericTitles[Math.floor(i / batchSize) % genericTitles.length]
         });
       }
 
       // Generate the first 3 chunks (9 days) synchronously to show the calendar quickly
       const numInitialChunks = 3;
-      for (const chunk of chunks.slice(0, numInitialChunks)) {
-        setLoadingTitle(chunk.title);
+      for (let idx = 0; idx < numInitialChunks; idx++) {
+        const chunk = chunks[idx];
+        setLoadingTitle(genericTitles[idx]);
         const daySubset = skeletonSeries.days.slice(chunk.start, chunk.end);
         const chunkResults = await generateSeriesChunk(daySubset, profile, concept, i18n.language);
         
@@ -3092,7 +3104,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               const dayHook = day.hooks ? day.hooks[0] : day.hook;
               const note = dayNotes[day.day];
               const dateStr = getDayDate(day.day);
-              const isGenerating = !day.scripts || day.scripts.length === 0;
+              const isGenerating = !day.scripts || day.scripts.length === 0 || day.scripts[0] === "";
               return (
                 <button
                   key={day.day}
@@ -3208,7 +3220,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               {series.days.map((day: any) => {
                 const isCompleted = completedDays.includes(day.day);
                 const dateStr = getDayDate(day.day);
-                const isGenerating = !day.scripts || day.scripts.length === 0;
+                const isGenerating = !day.scripts || day.scripts.length === 0 || day.scripts[0] === "";
                 return (
                   <button
                     key={day.day}
@@ -4062,7 +4074,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               <span>{t('detail.previousDay')}</span>
             </button>
             <button 
-              disabled={activeDay === 30}
+              disabled={
+                activeDay === 30 || 
+                (series.days[activeDay] && (!series.days[activeDay].scripts || series.days[activeDay].scripts.length === 0 || series.days[activeDay].scripts[0] === ""))
+              }
               onClick={() => setActiveDay(prev => Math.min(30, prev + 1))}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-primary text-white font-semibold disabled:opacity-30 transition-all hover:bg-brand-primary/90"
             >
