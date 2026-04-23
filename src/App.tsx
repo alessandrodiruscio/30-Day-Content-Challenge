@@ -1920,7 +1920,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
       const data = await safeJson(res);
       if (res.ok) {
         if (mode === 'forgot') {
-          setSuccessMessage(data.message || t('resetPassword.successDesc', 'If an account matches that email, a password reset link has been sent.'));
+          setSuccessMessage(data.message || t('resetPassword.forgotSuccess', 'You will receive an email in the next five minutes to reset your password.'));
         } else {
           onSuccess(data.token, data.user);
         }
@@ -2421,6 +2421,55 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [regenerateIdea, setRegenerateIdea] = useState<string>('');
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
+
+  // Background chunk generation resumed
+  const [isResumingGeneration, setIsResumingGeneration] = useState(false);
+
+  useEffect(() => {
+    const ungeneratedDays = series.days.filter((d: any) => !d.scripts || d.scripts.length === 0 || d.scripts[0] === "");
+    if (ungeneratedDays.length > 0 && !isResumingGeneration) {
+      setIsResumingGeneration(true);
+      console.log(`[Resume Generation] Resuming background generation for ${ungeneratedDays.length} days...`);
+      
+      const resumeChunks = async () => {
+        let currentSeriesState = { ...series };
+        const concept = {
+          title: series.title,
+          description: series.description,
+          targetAudience: series.targetAudience,
+          theme: series.theme
+        };
+        
+        try {
+          const batchSize = 5;
+          for (let i = 0; i < ungeneratedDays.length; i += batchSize) {
+            const daySubset = ungeneratedDays.slice(i, i + batchSize);
+            const chunkResults = await generateSeriesChunk(daySubset, profile, concept as any, i18n.language);
+            
+            chunkResults.forEach((res: any) => {
+              const dIdx = currentSeriesState.days.findIndex((d: any) => d.day === res.day);
+              if (dIdx !== -1) {
+                currentSeriesState.days[dIdx].scripts = res.scripts;
+                currentSeriesState.days[dIdx].visuals_list = res.visuals;
+                currentSeriesState.days[dIdx].captions = res.captions;
+                currentSeriesState.days[dIdx].visuals = res.visuals[0];
+                currentSeriesState.days[dIdx].caption = res.captions[0];
+              }
+            });
+            
+            // Save chunk to propagate state upstream
+            await onSave({ ...currentSeriesState });
+          }
+        } catch (err) {
+          console.error("Failed to resume generation:", err);
+        } finally {
+          setIsResumingGeneration(false);
+        }
+      };
+      
+      resumeChunks();
+    }
+  }, [series, isResumingGeneration, profile, i18n.language, onSave]);
 
   // Trigger content generation for the active day if it's missing (skeleton to full)
   useEffect(() => {

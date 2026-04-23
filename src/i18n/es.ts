@@ -223,6 +223,7 @@ const es = {
 
     // Reset Password
     resetPassword: {
+      forgotSuccess: "Recibirás un correo electrónico en los próximos cinco minutos para restablecer tu contraseña.",
       success: "¡Contraseña Restablecida!",
       successDesc: "Tu contraseña ha sido actualizada exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.",
       goToLogin: "Ir al Inicio de Sesión",

@@ -228,6 +228,7 @@ const en = {
 
     // Reset Password
     resetPassword: {
+      forgotSuccess: "You will receive an email in the next five minutes to reset your password.",
       success: "Password Reset!",
       successDesc: "Your password has been successfully updated. You can now login with your new password.",
       goToLogin: "Go to Login",

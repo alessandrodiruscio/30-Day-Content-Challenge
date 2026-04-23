@@ -270,7 +270,9 @@ post("/api/forgot-password", async (req: any, res: any) => {
     const resetSecret = JWT_SECRET + user.password;
     const resetToken = jwt.sign({ id: user.id, email: user.email }, resetSecret, { expiresIn: '1h' });
     
-    const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/?step=reset-password&token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+    const origin = req.headers.origin || req.headers.referer?.split('?')[0] || process.env.APP_URL || 'http://localhost:3000';
+    const baseUrl = origin.replace(/\/$/, '');
+    const resetUrl = `${baseUrl}/?step=reset-password&token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
     if (!process.env.RESEND_API_KEY) {
       console.warn("RESEND_API_KEY is not defined. Attempting fallback print.");
