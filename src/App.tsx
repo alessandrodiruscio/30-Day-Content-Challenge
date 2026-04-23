@@ -992,7 +992,7 @@ export default function App() {
             <AuthView 
               key="auth" 
               initialMode={(new URLSearchParams(window.location.search).get('step') === 'forgot_password' || new URLSearchParams(window.location.search).get('step') === 'forgot-password') ? 'forgot' : 'login'}
-              onSuccess={(t, u) => {
+              onSuccess={async (t, u) => {
                 setToken(t);
                 setUser(u);
                 try {
@@ -1000,13 +1000,15 @@ export default function App() {
                 } catch (e) {
                   console.warn("Failed to save to localStorage:", e);
                 }
-                robustFetch('/api/community/membership', {
+                
+                const p1 = robustFetch('/api/community/membership', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
                 .then(r => r.json())
                 .then(d => setMembership(d))
                 .catch(err => console.error("Failed to fetch membership:", err));
-                robustFetch('/api/me', {
+                
+                const p2 = robustFetch('/api/me', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
                 .then(res => safeJson(res))
@@ -1026,7 +1028,8 @@ export default function App() {
                   }
                 })
                 .catch(err => console.error("Failed to fetch profile:", err));
-                robustFetch('/api/strategies', {
+                
+                const p3 = robustFetch('/api/strategies', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
                 .then(res => safeJson(res))
@@ -1045,6 +1048,8 @@ export default function App() {
                   console.error("[App] Failed to fetch initial strategies:", err);
                   setStep('form');
                 });
+
+                await Promise.all([p1, p2, p3]);
               }} 
               onBack={() => setStep('landing')}
             />
@@ -1868,7 +1873,7 @@ function LoadingView({ title, showPercentage = false, progress: forcedProgress =
   );
 }
 
-function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (token: string, user: User) => void, onBack: () => void, initialMode?: 'login' | 'register' | 'forgot' }) {
+function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (token: string, user: User) => Promise<void> | void, onBack: () => void, initialMode?: 'login' | 'register' | 'forgot' }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode);
   const [email, setEmail] = useState('');
@@ -1922,7 +1927,7 @@ function AuthView({ onSuccess, onBack, initialMode = 'login' }: { onSuccess: (to
         if (mode === 'forgot') {
           setSuccessMessage(data.message || t('resetPassword.forgotSuccess', 'You will receive an email in the next five minutes to reset your password.'));
         } else {
-          onSuccess(data.token, data.user);
+          await onSuccess(data.token, data.user);
         }
       } else {
         setError(data.error || 'Authentication failed');
