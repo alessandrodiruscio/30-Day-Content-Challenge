@@ -1120,7 +1120,7 @@ export default function App() {
           )}
 
           {step === 'loading_options' && (
-            <LoadingView key="loading_options" title={t('loading.craftingConcepts')} showPercentage={false} />
+            <LoadingView key="loading_options" title={t('loading.craftingConcepts')} showPercentage={true} estimatedDurationMs={12000} />
           )}
 
           {step === 'results' && (
@@ -1816,11 +1816,10 @@ function FormView({ profile, setProfile, onSubmit, onBack, error, hasApiKey, onS
   );
 }
 
-function LoadingView({ title, showPercentage = false, progress: forcedProgress = 0 }: { title: string, showPercentage?: boolean, progress?: number }) {
+function LoadingView({ title, showPercentage = false, progress: forcedProgress = 0, estimatedDurationMs = 180000 }: { title: string, showPercentage?: boolean, progress?: number, estimatedDurationMs?: number }) {
   const { t } = useTranslation();
   const [internalProgress, setInternalProgress] = useState(0);
   const startTimeRef = React.useRef(Date.now());
-  const estimatedDurationMs = 180000; // 3 minutes to reach 99%
   
   useEffect(() => {
     if (!showPercentage || forcedProgress > 0) return;
@@ -2387,17 +2386,23 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
             </div>
 
             <div className="pt-6 border-t border-surface-container-highest/20 flex flex-col gap-4">
-              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-80">
-                <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30">
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface opacity-80">
+                <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30 tracking-normal">
                   <Target size={18} />
                 </div>
-                <span>{option.targetAudience}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Target Audience</span>
+                  <span className="font-bold font-headline leading-tight">{option.targetAudience}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface font-bold font-headline uppercase tracking-widest opacity-80">
-                <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30">
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-on-surface opacity-80 mt-1">
+                <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-surface-container flex items-center justify-center text-primary border border-surface-container-highest/30 tracking-normal">
                   <Sparkles size={18} />
                 </div>
-                <span>{option.theme}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5">Content Theme</span>
+                  <span className="font-bold font-headline leading-tight">{option.theme}</span>
+                </div>
               </div>
             </div>
           </motion.div>
