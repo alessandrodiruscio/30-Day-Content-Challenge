@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -2380,7 +2381,9 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
                 {t('results.option')} {i + 1}
               </span>
               <h3 className="text-3xl font-black font-headline leading-tight mb-8 group-hover:text-primary transition-colors tracking-tight">{option.title}</h3>
-              <p className="text-on-surface-variant leading-relaxed font-body font-light opacity-70">{option.description}</p>
+              <div className="text-on-surface-variant leading-relaxed font-body font-light opacity-70 markdown-body">
+                <Markdown>{option.description}</Markdown>
+              </div>
             </div>
 
             <div className="pt-10 border-t border-surface-container-highest/20 flex flex-col gap-5">
