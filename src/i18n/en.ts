@@ -46,7 +46,7 @@ const en = {
       generatingSeries: "Generating Full Scripts & Researching Market...",
       progress: "Progress",
       refining: "Refining last changes...",
-      coffeeMessage: "This will take 2-3 minutes. Why not grab a coffee? ☕",
+      coffeeMessage: "This will take 4-5 minutes. Please do not close this page. Why not grab a coffee? ☕",
       quote: '"Consistency is the bridge between goals and accomplishment."',
     },
 

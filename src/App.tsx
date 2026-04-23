@@ -50,7 +50,8 @@ import {
   Trophy,
   Award,
   ShieldAlert,
-  XCircle
+  XCircle,
+  Loader2
 } from 'lucide-react';
 import { UserProfile, ContentSeries, SeriesConcept, User, Achievement } from './types';
 import { robustFetch, safeJson, fetchAchievements } from './utils/api';
@@ -533,7 +534,7 @@ export default function App() {
       setLoadingProgress(20);
       setLoadingTitle("Step 1 of 4: Planning challenge structure...");
 
-      // Step 2-4: Generate Chunks (in smaller batches to prevent Vercel timeouts)
+      // Step 2-4: Generate Chunks (in smaller batches)
       const chunks = [];
       const batchSize = 3;
       for (let i = 0; i < 30; i += batchSize) {
@@ -545,7 +546,9 @@ export default function App() {
         });
       }
 
-      for (const chunk of chunks) {
+      // Generate the first 3 chunks (9 days) synchronously to show the calendar quickly
+      const numInitialChunks = 3;
+      for (const chunk of chunks.slice(0, numInitialChunks)) {
         setLoadingTitle(chunk.title);
         const daySubset = skeletonSeries.days.slice(chunk.start, chunk.end);
         const chunkResults = await generateSeriesChunk(daySubset, profile, concept, i18n.language);
@@ -576,7 +579,7 @@ export default function App() {
       // Auto-save if logged in
       let savedId = null;
       if (token) {
-        setLoadingTitle("Saving strategy to your profile...");
+        setLoadingTitle("Preparing Calendar Phase 1...");
         try {
           const saveRes = await robustFetch('/api/strategies', {
             method: 'POST',
@@ -599,8 +602,6 @@ export default function App() {
           const savedData = await safeJson(saveRes);
           savedId = savedData.id;
           setSavedStrategies(prev => [savedData, ...prev]);
-          setError("Strategy saved successfully!");
-          setTimeout(() => setError(null), 3000);
         } catch (err: any) {
           console.error("Failed to auto-save strategy:", err);
           setError(`Saving failed: ${err.message}`);
@@ -612,6 +613,54 @@ export default function App() {
       setSelectedSeries(finalSeries);
       setLoadingProgress(100);
       setStep('detail');
+
+      // 🔥 Background generation for remaining chunks
+      const generateRemainingChunks = async (initialSeriesState: any) => {
+        let currentSeriesState = { ...initialSeriesState };
+        try {
+          for (const chunk of chunks.slice(numInitialChunks)) {
+            const daySubset = currentSeriesState.days.slice(chunk.start, chunk.end);
+            const chunkResults = await generateSeriesChunk(daySubset, profile, concept, i18n.language);
+            
+            // Merge results
+            chunkResults.forEach((res: any) => {
+              const dIdx = currentSeriesState.days.findIndex((d: any) => d.day === res.day);
+              if (dIdx !== -1) {
+                currentSeriesState.days[dIdx].scripts = res.scripts;
+                currentSeriesState.days[dIdx].visuals_list = res.visuals;
+                currentSeriesState.days[dIdx].captions = res.captions;
+                currentSeriesState.days[dIdx].visuals = res.visuals[0];
+                currentSeriesState.days[dIdx].caption = res.captions[0];
+              }
+            });
+            
+            // Update React state
+            setSelectedSeries({ ...currentSeriesState });
+            
+            // Auto-save the chunk to database if we grabbed the ID
+            if (token && currentSeriesState.id) {
+              await robustFetch(`/api/strategies/${currentSeriesState.id}`, {
+                method: 'PATCH',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  title: currentSeriesState.title,
+                  data: { ...currentSeriesState, contentType: profile.contentType },
+                  start_date: profile.startDate
+                })
+              }).catch(e => console.error("Chunk save failed:", e));
+            }
+          }
+        } catch (err) {
+          console.error("Background chunk generation failed:", err);
+        }
+      };
+
+      // Start background process without blocking
+      generateRemainingChunks(finalSeries);
+
     } catch (err: any) {
       console.error("Generation error:", err);
       handleGeminiError(err);
@@ -3024,13 +3073,24 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               const dayHook = day.hooks ? day.hooks[0] : day.hook;
               const note = dayNotes[day.day];
               const dateStr = getDayDate(day.day);
+              const isGenerating = !day.scripts || day.scripts.length === 0;
               return (
                 <button
                   key={day.day}
-                  onClick={() => { setActiveDay(day.day); setDetailViewMode('day'); }}
+                  onClick={() => { 
+                    if (isGenerating) {
+                      setError(`Day ${day.day} is still being generated. Please wait a moment.`);
+                      setTimeout(() => setError(""), 3000);
+                      return;
+                    }
+                    setActiveDay(day.day); 
+                    setDetailViewMode('day'); 
+                  }}
                   className={cn(
                     "text-left p-5 rounded-2xl border-2 transition-all hover:shadow-md group",
-                    isCompleted
+                    isGenerating
+                      ? "border-dashed border-zinc-200 bg-zinc-50/50 opacity-60 cursor-not-allowed"
+                      : isCompleted
                       ? "border-emerald-200 bg-emerald-50/50 hover:border-emerald-300"
                       : "border-zinc-100 bg-white hover:border-brand-primary/30"
                   )}
@@ -3038,9 +3098,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   <div className="flex items-center justify-between mb-3">
                     <div className={cn(
                       "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0",
-                      isCompleted ? "bg-emerald-100 text-emerald-700" : "bg-brand-primary/10 text-brand-primary"
+                      isGenerating ? "bg-zinc-200 text-zinc-400" : isCompleted ? "bg-emerald-100 text-emerald-700" : "bg-brand-primary/10 text-brand-primary"
                     )}>
-                      {day.day}
+                      {isGenerating ? <Loader2 size={16} className="animate-spin" /> : day.day}
                     </div>
                     {isCompleted ? (
                       <div className="flex items-center gap-1 text-emerald-600">
@@ -3128,13 +3188,23 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               {series.days.map((day: any) => {
                 const isCompleted = completedDays.includes(day.day);
                 const dateStr = getDayDate(day.day);
+                const isGenerating = !day.scripts || day.scripts.length === 0;
                 return (
                   <button
                     key={day.day}
-                    onClick={() => setActiveDay(day.day)}
+                    onClick={() => {
+                      if (isGenerating) {
+                        setError(`Day ${day.day} is still being generated. Please wait a moment.`);
+                        setTimeout(() => setError(""), 3000);
+                        return;
+                      }
+                      setActiveDay(day.day);
+                    }}
                     className={cn(
                       "relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all",
-                      activeDay === day.day 
+                      isGenerating
+                        ? "bg-zinc-100 text-zinc-300 cursor-not-allowed opacity-50 border border-dashed border-zinc-200"
+                        : activeDay === day.day 
                         ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 scale-110 z-10" 
                         : isCompleted
                           ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
@@ -3143,6 +3213,9 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   >
                     <span className="text-sm font-bold">{day.day}</span>
                     {dateStr && <span className={cn("text-[10px] font-bold mt-0.5", activeDay === day.day ? "text-white/90" : "text-zinc-500")}>{dateStr}</span>}
+                    {isGenerating && (
+                      <Loader2 size={12} className="animate-spin text-zinc-400 mt-1" />
+                    )}
                     {isCompleted && activeDay !== day.day && (
                       <div className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
                         <CheckCircle2 size={10} />
