@@ -1901,7 +1901,7 @@ function LoadingView({ title, showPercentage = false, progress: forcedProgress =
         </div>
       )}
       
-      {showPercentage && (
+      {showPercentage && estimatedDurationMs > 60000 && (
         <p className="text-on-surface-variant max-w-xs mb-6 text-sm font-body italic opacity-70">
           {t('loading.coffeeMessage')}
         </p>

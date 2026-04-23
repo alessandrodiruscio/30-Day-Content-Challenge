@@ -62,7 +62,7 @@ export const generateOptions = async (profile: UserProfile, language: string = '
   OUTPUT REQUIREMENTS:
   1. Each option must have a unique, niche-specific angle.
   2. The "Title" should be catchy but relevant.
-  3. The "Description" must clearly detail how this strategy builds authority in the niche. It MUST be formatted using markdown (bullet points, short paragraphs, or bold text) to ensure readability instead of a single wall of text.
+  3. The "Description" must clearly detail how this strategy builds authority. CRITICAL: You MUST format this field using markdown. Because you are outputting a JSON string, you MUST use explicit newline characters (\\n\\n) to separate paragraphs. You MUST use bullet points and bold text to ensure readability instead of a single wall of text!
   4. The "Theme" must be a concise 3-5 word summary of the content pillar.
 
   ${languageInstruction}`;
