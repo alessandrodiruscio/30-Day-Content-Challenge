@@ -357,31 +357,39 @@ function Confetti() {
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
-  const resetStep = searchParams.get('step') === 'reset_password' || searchParams.get('step') === 'reset-password';
+  const isResetStepUrl = searchParams.get('step') === 'reset_password' || searchParams.get('step') === 'reset-password';
   const initialResetToken = searchParams.get('token') || '';
+  
   const { t, i18n } = useTranslation();
   const toggleLanguage = () => {
     const next = i18n.language === 'en' ? 'es' : 'en';
     i18n.changeLanguage(next);
     localStorage.setItem('language', next);
   };
-  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password'>(
-    (sessionStorage.getItem('currentStep') as any) || 'landing'
-  );
+
+  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password'>(() => {
+    if (isResetStepUrl && initialResetToken) {
+      return 'reset_password';
+    }
+    return (sessionStorage.getItem('currentStep') as any) || 'landing';
+  });
+
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const [resetToken] = useState<string>(initialResetToken);
-  if (resetStep) {
-    return (
-      <ResetPasswordView
-        token={resetToken}
-        onSuccess={() => setStep('auth')}
-        onBack={() => setStep('landing')}
-      />
-    );
-  }
+
+  // Clean up URL parameters after initial parse so we don't get stuck here
+  useEffect(() => {
+    if (isResetStepUrl) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('step');
+      url.searchParams.delete('token');
+      url.searchParams.delete('email');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [isResetStepUrl]);
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = sessionStorage.getItem('currentProfile');
     if (saved) return JSON.parse(saved);
