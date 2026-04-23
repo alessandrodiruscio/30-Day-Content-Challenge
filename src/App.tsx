@@ -413,6 +413,23 @@ export default function App() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingTitle, setLoadingTitle] = useState('');
 
+  // Smooth fluid progress bar simulation during loading
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (step === 'loading_series') {
+      interval = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 90) return prev; // Cap fluid simulation at 90%
+          const stepAmount = prev < 30 ? 0.8 : prev < 60 ? 0.4 : prev < 80 ? 0.2 : 0.05;
+          return prev + stepAmount;
+        });
+      }, 250);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [step]);
+
   useEffect(() => {
     const restoreSession = async () => {
       if (!token) {
@@ -525,13 +542,13 @@ export default function App() {
   const handleSelectConcept = async (concept: SeriesConcept) => {
     setStep('loading_series');
     setError(null);
-    setLoadingProgress(5);
+    setLoadingProgress(2);
     setLoadingTitle(t('loading.generatingSeries'));
     
     try {
       // Step 1: Generate Skeleton
       const skeletonSeries = await generateSeries(concept, profile, i18n.language);
-      setLoadingProgress(20);
+      setLoadingProgress(prev => Math.max(prev, 25)); // Boost it up if it was lagging
       setLoadingTitle("Step 1 of 4: Planning challenge structure...");
 
       // Step 2-4: Generate Chunks (in smaller batches)
@@ -566,7 +583,9 @@ export default function App() {
             skeletonSeries.days[dIdx].caption = res.captions[0];
           }
         });
-        setLoadingProgress(chunk.progress);
+        
+        // Boost the bar higher as chunks resolve, giving it a visible bump on top of the fluid sim
+        setLoadingProgress(prev => Math.max(prev, chunk.progress));
       }
       
       const fullSeries = skeletonSeries;
@@ -3102,18 +3121,19 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     )}>
                       {isGenerating ? <Loader2 size={16} className="animate-spin" /> : day.day}
                     </div>
+                    {isGenerating && <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Generating...</span>}
                     {isCompleted ? (
                       <div className="flex items-center gap-1 text-emerald-600">
                         <CheckCircle2 size={13} />
                         <span className="text-xs font-bold">Done</span>
                       </div>
                     ) : (
-                      dateStr && <span className="text-xs text-zinc-400">{dateStr}</span>
+                      !isGenerating && dateStr && <span className="text-xs text-zinc-400">{dateStr}</span>
                     )}
                   </div>
                   {dayHook && (
-                    <p className="text-xs font-medium text-zinc-700 leading-relaxed line-clamp-2 mb-2 group-hover:text-brand-primary transition-colors">
-                      {dayHook}
+                    <p className={cn("text-xs font-medium leading-relaxed line-clamp-2 mb-2 transition-colors", isGenerating ? "text-zinc-400" : "text-zinc-700 group-hover:text-brand-primary")}>
+                      {isGenerating && !dayHook ? 'Writing content script...' : dayHook}
                     </p>
                   )}
                   {note && note.trim() && (
@@ -3203,7 +3223,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     className={cn(
                       "relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all",
                       isGenerating
-                        ? "bg-zinc-100 text-zinc-300 cursor-not-allowed opacity-50 border border-dashed border-zinc-200"
+                        ? "bg-zinc-50 text-zinc-300 cursor-not-allowed border border-dashed border-zinc-200"
                         : activeDay === day.day 
                         ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 scale-110 z-10" 
                         : isCompleted
@@ -3211,15 +3231,18 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                           : "bg-zinc-50 text-zinc-400 hover:bg-zinc-100"
                     )}
                   >
-                    <span className="text-sm font-bold">{day.day}</span>
-                    {dateStr && <span className={cn("text-[10px] font-bold mt-0.5", activeDay === day.day ? "text-white/90" : "text-zinc-500")}>{dateStr}</span>}
-                    {isGenerating && (
-                      <Loader2 size={12} className="animate-spin text-zinc-400 mt-1" />
-                    )}
-                    {isCompleted && activeDay !== day.day && (
-                      <div className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
-                        <CheckCircle2 size={10} />
-                      </div>
+                    {isGenerating ? (
+                      <Loader2 size={18} className="animate-spin text-zinc-400" />
+                    ) : (
+                      <>
+                        <span className="text-sm font-bold">{day.day}</span>
+                        {dateStr && <span className={cn("text-[10px] font-bold mt-0.5", activeDay === day.day ? "text-white/90" : "text-zinc-500")}>{dateStr}</span>}
+                        {isCompleted && activeDay !== day.day && (
+                          <div className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                            <CheckCircle2 size={10} />
+                          </div>
+                        )}
+                      </>
                     )}
                   </button>
                 );
