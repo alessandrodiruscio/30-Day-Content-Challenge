@@ -68,10 +68,10 @@ export const generateOptions = async (profile: UserProfile, language: string = '
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
-      systemInstruction: "You are a world-class Instagram Content Architect. Your expertise is in creating hyper-relevant, niche-specific 30-day challenges that convert views into authority. You never provide generic advice; you always deep-dive into the specific industry provided by the user.",
+      systemInstruction: "You are a world-class Instagram Content Architect. Your expertise is in creating hyper-relevant, niche-specific 30-day challenges that convert views into authority.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -125,7 +125,7 @@ export const generateSeries = async (concept: SeriesConcept, profile: UserProfil
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       maxOutputTokens: 8192,
@@ -219,7 +219,7 @@ export const generateSeriesChunk = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Strategist. For every day, you MUST return 3 scripts (each with 7 paragraphs separated by \\n\\n) and 3 storyboard strings (each with 7 lines).",
@@ -279,7 +279,7 @@ export const generateDayContent = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Creator. Scripts MUST have 7 paragraphs separated by double newlines. Storyboards MUST have 7 lines.",
@@ -317,7 +317,7 @@ export const refineScript = async (baseScript: string, newHook: string, audience
     ${languageInstruction}`;
     
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a professional scriptwriter. Provide ONLY the refined script text."
@@ -365,7 +365,7 @@ export const regenerateDayContentWithIdea = async (
   ${languageInstruction}`;
 
   const response = await withRetry(() => ai.models.generateContent({
-    model: "gemini-flash-lite-latest",
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       systemInstruction: "You are a Content Strategist. For every day, you MUST return 3 scripts (each with exactly 7 paragraphs separated by \\n\\n) and 3 storyboard strings (each with exactly 7 lines).",
