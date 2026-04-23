@@ -413,6 +413,23 @@ export default function App() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingTitle, setLoadingTitle] = useState('');
 
+  // Safeguard against closing the tab while background generation is running
+  const isGeneratingContent = 
+    step === 'loading_options' || 
+    step === 'loading_series' || 
+    (step === 'detail' && selectedSeries?.days?.some((d: any) => !d.scripts || d.scripts.length === 0 || d.scripts[0] === ""));
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isGeneratingContent) {
+        e.preventDefault();
+        e.returnValue = ''; // Setting returnValue triggers the browser's native warning dialog
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isGeneratingContent]);
+
   // Smooth fluid progress bar simulation during loading
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -420,10 +437,9 @@ export default function App() {
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
           if (prev >= 90) return prev; // Cap fluid simulation at 90%
-          // Need to reach ~90% in ~45 seconds. 
-          // 250ms interval = 4 ticks/sec. 45 secs = 180 ticks.
-          // 90 / 180 = 0.5% per tick. Let's make it slighty slower initially and gradually slow down.
-          const stepAmount = prev < 40 ? 0.6 : prev < 70 ? 0.3 : prev < 85 ? 0.15 : 0.05;
+          // Greatly slowed down so it doesn't hit the 90% "COMPLETING..." state too fast.
+          // 250ms interval = 4 ticks/sec.
+          const stepAmount = prev < 40 ? 0.2 : prev < 70 ? 0.1 : prev < 85 ? 0.05 : 0.02;
           return prev + stepAmount;
         });
       }, 250);
@@ -2684,43 +2700,6 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       displayVisuals = currentDay.visuals_list[currentHookIndex] || currentDay.visuals_list[0] || '';
     } else {
       displayVisuals = currentDay.visuals || '';
-    }
-
-    // --- Inject Dynamic CTA into script & visuals (Applies to ALL challenges old and new) ---
-    const getCTAKeyword = () => {
-      const offer = profile?.primaryCTA || series?.targetAudience || "my offer";
-      const stopWords = ['THIS', 'THAT', 'WITH', 'FROM', 'YOUR', 'WHAT', 'HOW', 'ABOUT', 'THE', 'AND', 'FOR', 'GET'];
-      const words = offer.split(' ');
-      for (let w of words) {
-        const clean = w.toUpperCase().replace(/[^A-Z]/g, '');
-        if (clean.length >= 3 && clean.length <= 10 && !stopWords.includes(clean)) {
-          return clean;
-        }
-      }
-      return 'LINK';
-    };
-    
-    const keyword = getCTAKeyword();
-    const ctaOfferText = profile?.primaryCTA || series?.targetAudience || "this resource";
-    const ctaContent = `And if you're interested in taking this further, comment "${keyword}" below and I'll send you the link to ${ctaOfferText}!`;
-    const ctaVisualLine = `Action: Creator points down to the comments. On-screen text: "Comment ${keyword}"`;
-
-    const hasCTA = displayScript.includes(ctaContent) || displayScript.toLowerCase().includes('comment "') || displayScript.toLowerCase().includes('comment below');
-    
-    if (!hasCTA) {
-      let scriptParts = displayScript.split(/\n\n+/).filter((p: string) => p.trim());
-      let visualParts = displayVisuals.split('\n').filter((l: string) => l.trim());
-      
-      if (scriptParts.length > 0) {
-        scriptParts.push(ctaContent);
-        
-        if (visualParts.length > 0) {
-          visualParts.push(ctaVisualLine);
-        }
-        
-        displayScript = scriptParts.join('\n\n');
-        displayVisuals = visualParts.join('\n');
-      }
     }
 
     return { displayHook, displayScript, displayCaption, displayCTA, displayAdvice, displayVisuals };

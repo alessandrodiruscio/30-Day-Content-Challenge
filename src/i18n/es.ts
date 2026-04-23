@@ -46,7 +46,7 @@ const es = {
       generatingSeries: "Generando Guiones Completos e Investigando el Mercado...",
       progress: "Progreso",
       refining: "Refinando los últimos cambios...",
-      coffeeMessage: "Esto tomará 4-5 minutos. Por favor, no cierres esta página. ¿Por qué no te preparas un café? ☕",
+      coffeeMessage: "Esto tomará 2-3 minutos. Por favor, no cierres esta página. ¿Por qué no te preparas un café? ☕",
       quote: '"La consistencia es el puente entre los objetivos y el logro."',
     },
 
