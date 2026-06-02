@@ -51,13 +51,13 @@ export const generateSeriesChunk = async (
 };
 
 export const generateDayContent = async (
-  dayTitle: string, 
-  dayDescription: string, 
+  day: any, 
   profile: UserProfile, 
-  seriesHook?: string,
+  concept: SeriesConcept,
+  hookIndex: number = 0,
   language: string = 'en'
 ): Promise<any> => {
-  return fetchGemini('day-content', { dayTitle, dayDescription, profile, seriesHook, language });
+  return fetchGemini('day-content', { day, profile, concept, hookIndex, language });
 };
 
 export const refineScript = async (
@@ -71,12 +71,11 @@ export const refineScript = async (
 };
 
 export const regenerateDayContentWithIdea = async (
-  dayTitle: string,
-  dayDescription: string,
+  dayNumber: number,
   idea: string,
   profile: UserProfile,
-  seriesHook?: string,
+  concept: SeriesConcept,
   language: string = 'en'
 ): Promise<any> => {
-  return fetchGemini('regenerate-day', { dayTitle, dayDescription, idea, profile, seriesHook, language });
+  return fetchGemini('regenerate-day', { dayNumber, idea, profile, concept, language });
 };

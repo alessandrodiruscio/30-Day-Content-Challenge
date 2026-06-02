@@ -2,7 +2,7 @@ import express from "express";
 import mysql from "mysql2/promise";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import dotenv from "dotenv";
+// dotenv.config() removed to prevent placeholder overrides
 import fs from "fs";
 import path from "path";
 import { Resend } from "resend";
@@ -14,22 +14,9 @@ import {
   refineScript, 
   regenerateDayContentWithIdea 
 } from "./_geminiService.js";
+import { defaultCreatorExamples } from "./creatorExamples.js";
 
-// 1. Load environment variables
-dotenv.config({ override: true });
-
-// FIX: Ensure the correct key is used in this environment by prioritizing our .env file.
-// This is necessary because some environments may inject a stale or invalid key.
-try {
-  const keyFile = path.resolve(process.cwd(), '.env');
-  if (fs.existsSync(keyFile)) {
-    const envContent = fs.readFileSync(keyFile, 'utf8');
-    const match = envContent.match(/^GEMINI_API_KEY=(.*)$/m);
-    if (match && match[1]) {
-      process.env.GEMINI_API_KEY = match[1].trim();
-    }
-  }
-} catch (e) {}
+// Server initialization
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "escape_9_to_5_super_secret_key";
@@ -99,8 +86,6 @@ get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
     message: "Server is alive - Multi-path Cors Enabled",
-    env: process.env.NODE_ENV,
-    vercel: !!process.env.VERCEL,
     db_configured: !!process.env.DB_HOST,
     timestamp: new Date().toISOString()
   });
@@ -151,7 +136,12 @@ const getDbConfig = () => {
     password: process.env.DB_PASSWORD || "",
     database: process.env.DB_NAME || "database",
     port: parseInt(process.env.DB_PORT || "3306"),
-    connectTimeout: 5000, 
+    connectTimeout: 30000, 
+    waitForConnections: true,
+    connectionLimit: 20,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
   };
 };
 
@@ -172,14 +162,6 @@ const getPool = () => {
     pool.on('connection', (connection) => {
       console.log('[DB] New connection acquired from pool');
     });
-    
-    pool.on('error', (err) => {
-      console.error('[DB] Pool error:', err);
-      if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-        console.warn('[DB] Connection lost. Clearing pool cache.');
-        pool = null; // Next getPool() call will re-create it
-      }
-    });
   }
   return pool;
 };
@@ -196,10 +178,26 @@ const initDb = async (force = false) => {
     console.log("[DB] Connection test successful.");
 
     await db.execute(`CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL, niche VARCHAR(255), products TEXT, problems TEXT, audience TEXT, tone VARCHAR(255), contentType VARCHAR(255), primaryCTA TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS system_settings (key_name VARCHAR(255) PRIMARY KEY, value_text TEXT)`);
     await db.execute(`CREATE TABLE IF NOT EXISTS strategies (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(255) NOT NULL, data LONGTEXT NOT NULL, start_date VARCHAR(255), completed_days TEXT, day_checklist TEXT, day_notes TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
     try { await db.execute('ALTER TABLE strategies MODIFY COLUMN data LONGTEXT NOT NULL'); } catch (e) {}
     await db.execute(`CREATE TABLE IF NOT EXISTS achievements (id INT AUTO_INCREMENT PRIMARY KEY, code VARCHAR(255) UNIQUE NOT NULL, name_en VARCHAR(255) NOT NULL, name_es VARCHAR(255) NOT NULL, description_en TEXT NOT NULL, description_es TEXT NOT NULL, icon VARCHAR(255) NOT NULL, tier VARCHAR(50) NOT NULL)`);
     await db.execute(`CREATE TABLE IF NOT EXISTS user_achievements (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, achievement_id INT NOT NULL, strategy_id INT, unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY user_ach_at (user_id, achievement_id, strategy_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE, FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE)`);
+    await db.execute(`CREATE TABLE IF NOT EXISTS notifications (
+      id INT AUTO_INCREMENT PRIMARY KEY, 
+      user_id INT NOT NULL, 
+      title VARCHAR(255) NOT NULL, 
+      message TEXT NOT NULL, 
+      link VARCHAR(255), 
+      is_read BOOLEAN DEFAULT FALSE, 
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+      INDEX (user_id)
+    ) ENGINE=InnoDB`);
+    try {
+      await db.execute(`ALTER TABLE notifications ADD CONSTRAINT fk_user_notifications FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE`);
+    } catch (fkErr: any) {
+      console.warn("[DB] Notifications FK warning:", fkErr.message);
+    }
     
     const [rows]: any = await db.execute('SELECT COUNT(*) as count FROM achievements');
     if (rows[0].count === 0) {
@@ -214,6 +212,9 @@ const initDb = async (force = false) => {
         await db.execute('INSERT INTO achievements (code, name_en, name_es, description_en, description_es, icon, tier) VALUES (?, ?, ?, ?, ?, ?, ?)', ach);
       }
     }
+
+    // Seed default Google Sheet URL for Creator Examples if not already set
+    await db.execute(`INSERT INTO system_settings (key_name, value_text) VALUES ('creator_examples_sheet_url', 'https://docs.google.com/spreadsheets/d/1Uo0pM9T_XGuqkaarUhZMiDq_C5crehwN3a8RDxfW_40/edit?usp=sharing') ON DUPLICATE KEY UPDATE value_text = 'https://docs.google.com/spreadsheets/d/1Uo0pM9T_XGuqkaarUhZMiDq_C5crehwN3a8RDxfW_40/edit?usp=sharing'`);
     
     dbInitialized = true;
     console.log("[DB] Initialization completed successfully.");
@@ -235,6 +236,51 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+const ensureOnboardingNotifications = async (userId: number, attempts = 2) => {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const db = getPool();
+      const [existing]: any = await db.execute(
+        'SELECT title FROM notifications WHERE user_id = ? AND (title LIKE "Welcome!%" OR title LIKE "Join our Discord%")',
+        [userId]
+      );
+
+      if (existing.length < 2) {
+        const onboardingNotifications = [
+          {
+            title: "Welcome! Watch the Playbook",
+            message: "As a new member, we recommend watching our Playbook mini-course to get the most out of your 30-day challenge.",
+            link: process.env.PLAYBOOK_LINK || "https://example.com/playbook"
+          },
+          {
+            title: "Join our Discord Community",
+            message: "Connect with other creators, share your progress, and get feedback in our private Discord.",
+            link: process.env.DISCORD_LINK || "https://discord.com/invite/example"
+          }
+        ];
+
+        for (const notif of onboardingNotifications) {
+          const alreadyHas = existing.some((e: any) => e.title === notif.title);
+          if (!alreadyHas) {
+            await db.execute(
+              'INSERT INTO notifications (user_id, title, message, link) VALUES (?, ?, ?, ?)',
+              [userId, notif.title, notif.message, notif.link]
+            );
+          }
+        }
+      }
+      return; // Success
+    } catch (err) {
+      if (i === attempts - 1) {
+        console.error("[Notifications] Error ensuring onboarding notifs:", err);
+      } else {
+        console.warn(`[Notifications] Onboarding attempt ${i+1} failed, retrying...`, err instanceof Error ? err.message : err);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    }
+  }
+};
+
 // 5. Routes
 post("/api/register", async (req: any, res: any) => {
   try {
@@ -242,8 +288,12 @@ post("/api/register", async (req: any, res: any) => {
     const db = getPool();
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result]: any = await db.execute('INSERT INTO users (email, password) VALUES (?, ?)', [email, hashedPassword]);
-    const token = jwt.sign({ id: result.insertId, email }, JWT_SECRET);
-    res.json({ token, user: { id: result.insertId, email } });
+    const userId = result.insertId;
+    
+    await ensureOnboardingNotifications(userId);
+
+    const token = jwt.sign({ id: userId, email }, JWT_SECRET);
+    res.json({ token, user: { id: userId, email } });
   } catch (error: any) {
     res.status(400).json({ error: error.message || "Register failed" });
   }
@@ -258,6 +308,9 @@ post("/api/login", async (req: any, res: any) => {
     const user = rows[0];
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+
+    await ensureOnboardingNotifications(user.id);
+
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET);
     res.json({ token, user: { id: user.id, email: user.email } });
   } catch (error: any) {
@@ -484,6 +537,71 @@ get("/api/achievements", authenticateToken, async (req: any, res: any) => {
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 
+// Notifications
+get("/api/notifications", authenticateToken, async (req: any, res: any) => {
+  try {
+    const db = getPool();
+    
+    // Always ensure onboarding notifs exist
+    await ensureOnboardingNotifications(req.user.id);
+    console.log(`[Notifications] Onboarding check completed for user ${req.user.id}`);
+
+    const [rows]: any = await db.execute(
+      'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+post("/api/notifications/:id/read", authenticateToken, async (req: any, res: any) => {
+  try {
+    const db = getPool();
+    await db.execute(
+      'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+post("/api/admin/notifications/broadcast", authenticateToken, async (req: any, res: any) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || "alessandro.diruscio@gmail.com";
+    if (req.user.email !== adminEmail) {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
+    const adminSecret = req.headers['x-admin-secret'];
+    if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ error: "Unauthorized admin access (Invlid Secret)" });
+    }
+
+    const { title, message, link } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: "Title and message are required" });
+    }
+
+    const db = getPool();
+    const [users]: any = await db.execute('SELECT id FROM users');
+    
+    for (const u of users) {
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, link) VALUES (?, ?, ?, ?)',
+        [u.id, title, message, link || null]
+      );
+    }
+
+    res.json({ success: true, count: users.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Admin & Debug Routes
 post("/api/admin/reinit-db", async (req: any, res: any) => {
   try {
@@ -529,8 +647,8 @@ post("/api/gemini/series-chunk", authenticateToken, async (req: any, res: any) =
 
 post("/api/gemini/day-content", authenticateToken, async (req: any, res: any) => {
   try {
-    const { dayTitle, dayDescription, profile, seriesHook, language } = req.body;
-    const result = await generateDayContent(dayTitle, dayDescription, profile, seriesHook, language);
+    const { day, profile, concept, hookIndex, language } = req.body;
+    const result = await generateDayContent(day, profile, concept, hookIndex, language);
     res.json(result);
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
@@ -545,8 +663,8 @@ post("/api/gemini/refine-script", authenticateToken, async (req: any, res: any) 
 
 post("/api/gemini/regenerate-day", authenticateToken, async (req: any, res: any) => {
   try {
-    const { dayTitle, dayDescription, idea, profile, seriesHook, language } = req.body;
-    const result = await regenerateDayContentWithIdea(dayTitle, dayDescription, idea, profile, seriesHook, language);
+    const { dayNumber, idea, profile, concept, language } = req.body;
+    const result = await regenerateDayContentWithIdea(dayNumber, idea, profile, concept, language);
     res.json(result);
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
@@ -586,6 +704,336 @@ post("/api/report-bug", async (req: any, res: any) => {
     res.json({ success: true, data });
   } catch (error: any) { 
     res.status(500).json({ error: error.message }); 
+  }
+});
+
+// Helper functions for parsing Google Spreadsheet CSVs
+function getGoogleSheetCsvUrl(url: string): string {
+  if (url.includes('/export?format=csv')) return url;
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    const sheetId = match[1];
+    const gidMatch = url.match(/[#&?]gid=([0-9]+)/);
+    const gid = gidMatch && gidMatch[1] ? `&gid=${gidMatch[1]}` : '';
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gid}`;
+  }
+  return url;
+}
+
+function parseCSV(csvText: string): { headers: string[], rows: string[][] } {
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+  const parsedLines: string[][] = [];
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    const row: string[] = [];
+    let insideQuote = false;
+    let currentEntry = '';
+    
+    for (let c = 0; c < line.length; c++) {
+      const char = line[c];
+      if (char === '"') {
+        insideQuote = !insideQuote;
+      } else if (char === ',' && !insideQuote) {
+        row.push(currentEntry.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+        currentEntry = '';
+      } else {
+        currentEntry += char;
+      }
+    }
+    row.push(currentEntry.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+    parsedLines.push(row);
+  }
+
+  if (parsedLines.length === 0) return { headers: [], rows: [] };
+
+  const firstRow = parsedLines[0];
+  const firstRowStr = firstRow.join(' ').toLowerCase();
+  const hasHeaderSign = firstRowStr.includes('day') || 
+                        firstRowStr.includes('link') || 
+                        firstRowStr.includes('url') || 
+                        firstRowStr.includes('instagram') ||
+                        firstRowStr.includes('giorno') ||
+                        firstRowStr.includes('desc') ||
+                        firstRowStr.includes('result') ||
+                        firstRowStr.includes('risultat') ||
+                        firstRowStr.includes('style') ||
+                        firstRowStr.includes('stile');
+
+  if (hasHeaderSign) {
+    const headers = firstRow.map(h => h.trim().toLowerCase());
+    return { headers, rows: parsedLines.slice(1) };
+  } else {
+    const headers = Array.from({ length: firstRow.length }, (_, idx) => `col_${idx}`);
+    return { headers, rows: parsedLines };
+  }
+}
+
+// System settings routes
+get("/api/admin/settings", authenticateToken, async (req: any, res: any) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || "alessandro.diruscio@gmail.com";
+    if (req.user.email !== adminEmail) {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
+    const db = getPool();
+    const [rows]: any = await db.execute('SELECT key_name, value_text FROM system_settings');
+    const settings: Record<string, string> = {};
+    for (const r of rows) {
+      settings[r.key_name] = r.value_text;
+    }
+    res.json(settings);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+post("/api/admin/settings", authenticateToken, async (req: any, res: any) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || "alessandro.diruscio@gmail.com";
+    if (req.user.email !== adminEmail) {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
+    const adminSecret = req.headers['x-admin-secret'];
+    if (!process.env.ADMIN_SECRET || adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ error: "Unauthorized admin access (Invalid Secret)" });
+    }
+
+    const { creator_examples_sheet_url } = req.body;
+    const db = getPool();
+    
+    await db.execute(
+      'INSERT INTO system_settings (key_name, value_text) VALUES ("creator_examples_sheet_url", ?) ON DUPLICATE KEY UPDATE value_text = ?',
+      [creator_examples_sheet_url || '', creator_examples_sheet_url || '']
+    );
+
+    res.json({ success: true, creator_examples_sheet_url });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+get("/api/creator-examples", authenticateToken, async (req: any, res: any) => {
+  try {
+    const db = getPool();
+    let sheetUrl = "";
+    try {
+      const [rows]: any = await db.execute('SELECT value_text FROM system_settings WHERE key_name = "creator_examples_sheet_url"');
+      if (rows.length > 0) {
+        sheetUrl = rows[0].value_text;
+      }
+    } catch (dbErr) {
+      console.warn("Could not query system_settings:", dbErr);
+    }
+
+    if (sheetUrl) {
+      console.log("[Creator Examples] Fetching from Google Sheet:", sheetUrl);
+      try {
+        const csvUrl = getGoogleSheetCsvUrl(sheetUrl);
+        const fetchRes = await fetch(csvUrl);
+        if (fetchRes.ok) {
+          const csvText = await fetchRes.text();
+          const parsed = parseCSV(csvText);
+          
+          if (parsed && parsed.rows && parsed.rows.length > 0) {
+            const { headers, rows } = parsed;
+
+            let dayColIdx = headers.findIndex((h: string) => h.includes('day') || h.includes('giorno') || h.includes('#'));
+            if (dayColIdx === -1) dayColIdx = 0;
+            
+            let linkColIdx = headers.findIndex((h: string) => h.includes('link') || h.includes('url') || h.includes('instagram') || h.includes('ig') || h.includes('video'));
+            if (linkColIdx === -1) linkColIdx = 1;
+            
+            let descColIdx = headers.findIndex((h: string) => h.includes('desc') || h.includes('challenge') || h.includes('concept') || h.includes('copia') || h.includes('detail') || h.includes('cosa'));
+            if (descColIdx === -1) descColIdx = 2;
+            
+            let styleColIdx = headers.findIndex((h: string) => h.includes('style') || h.includes('editing') || h.includes('aest') || h.includes('stile') || h.includes('visu') || h.includes('format'));
+            if (styleColIdx === -1) styleColIdx = 3;
+            
+            let resultsColIdx = headers.findIndex((h: string) => h.includes('result') || h.includes('risultat') || h.includes('growth') || h.includes('metric') || h.includes('views') || h.includes('follower'));
+            if (resultsColIdx === -1) resultsColIdx = 4;
+
+            const mapped = rows.map((row, idx) => {
+              const day = parseInt(row[dayColIdx]) || (idx + 1);
+              return {
+                day: day,
+                link: row[linkColIdx] || "",
+                description: row[descColIdx] || "",
+                style: row[styleColIdx] || "",
+                results: row[resultsColIdx] || ""
+              };
+            });
+            
+            const filteredMapped = mapped.filter(item => item.link || item.description);
+            if (filteredMapped.length > 0) {
+              console.log(`[Creator Examples] Successfully loaded ${filteredMapped.length} rows from Google Sheet.`);
+              return res.json({ source: 'sheet', data: filteredMapped });
+            }
+          }
+        } else {
+          console.error("[Creator Examples] Google Sheet fetch responded negative:", fetchRes.status);
+        }
+      } catch (err) {
+        console.error("[Creator Examples] Error fetching/parsing sheet, falling back to static:", err);
+      }
+    }
+
+    res.json({ source: 'local', data: defaultCreatorExamples });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Instagram Video Thumbnail Proxy
+get("/api/instagram-video-thumbnail", async (req: any, res: any) => {
+  try {
+    const videoUrl = req.query.url;
+    if (!videoUrl) {
+      return res.status(400).send("No URL provided");
+    }
+
+    let shortcode = "";
+    // e.g. https://www.instagram.com/reel/C7W24v8S9_d/ or https://www.instagram.com/p/C7W24v8S9_d
+    const match = videoUrl.match(/\/(?:p|reel|tv)\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      shortcode = match[1];
+    } else {
+      return res.status(400).send("Invalid Instagram URL");
+    }
+
+    // --- PHASE 1: DIRECT MEDIA ENDPOINT ---
+    // Instagram offers direct media endpoints like `https://www.instagram.com/p/${shortcode}/media/?size=l`
+    // which redirects directly to the facebook/instagram static CDN photo URL. This works extremely well
+    // and is highly reliable since the final URL is hosted on a static public CDN (scontent.cdninstagram.com).
+    const directMediaUrl = `https://www.instagram.com/p/${shortcode}/media/?size=l`;
+    console.log(`[Instagram Thumbnail] Attempting direct media endpoint: ${directMediaUrl}`);
+    try {
+      const mediaController = new AbortController();
+      const mediaTimeoutId = setTimeout(() => mediaController.abort(), 3000);
+      
+      const mediaResponse = await fetch(directMediaUrl, {
+        signal: mediaController.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        }
+      });
+      clearTimeout(mediaTimeoutId);
+
+      if (mediaResponse.ok && mediaResponse.headers.get("content-type")?.startsWith("image/")) {
+        console.log(`[Instagram Thumbnail] Successfully fetched image from media endpoint directly`);
+        const contentType = mediaResponse.headers.get("content-type") || "image/jpeg";
+        const buffer = await mediaResponse.arrayBuffer();
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 1 day
+        return res.send(Buffer.from(buffer));
+      }
+    } catch (err: any) {
+      console.log(`[Instagram Thumbnail] Direct media endpoint failed (${err.message}). Trying embed endpoint fallback...`);
+    }
+
+    // --- PHASE 2: EMBED SCRAPER ENDPOINT ---
+    console.log(`[Instagram Thumbnail] Fetching embed for shortcode: ${shortcode}`);
+    const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    const response = await fetch(embedUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      }
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const html = await response.text();
+      let imageUrl = "";
+
+      // 1. Try matching "display_url" JSON field in script tags
+      const displayUrlMatch = html.match(/"display_url"\s*:\s*"([^"]+)"/);
+      if (displayUrlMatch && displayUrlMatch[1]) {
+        imageUrl = displayUrlMatch[1].replace(/\\u0026/g, '&');
+      }
+
+      // 2. Try match og:image meta tag
+      if (!imageUrl) {
+        const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) || 
+                             html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+        if (ogImageMatch && ogImageMatch[1]) {
+          imageUrl = ogImageMatch[1].replace(/\\u0026/g, '&');
+        }
+      }
+
+      // 3. Try match EmbeddedMediaImage img src
+      if (!imageUrl) {
+        const embeddedImgMatch = html.match(/class=["']EmbeddedMediaImage["'][^>]*src=["']([^"']+)["']/i);
+        if (embeddedImgMatch && embeddedImgMatch[1]) {
+          imageUrl = embeddedImgMatch[1].replace(/\\u0026/g, '&');
+        }
+      }
+
+      // 4. Try any fbcdn image URL
+      if (!imageUrl) {
+        const generalUrlMatch = html.match(/(https:\/\/[a-zA-Z0-9.-]+\.fbcdn\.net\/v\/[^"'\s]+?\.(?:jpg|jpeg|png|webp)[^"'\s]*)/);
+        if (generalUrlMatch && generalUrlMatch[1]) {
+          imageUrl = generalUrlMatch[1].replace(/\\u0026/g, '&');
+        }
+      }
+
+      if (imageUrl) {
+        console.log(`[Instagram Thumbnail] Proxying extracted image: ${imageUrl}`);
+        
+        const imgController = new AbortController();
+        const imgTimeoutId = setTimeout(() => imgController.abort(), 4000);
+
+        const imgRes = await fetch(imageUrl, {
+          signal: imgController.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          }
+        });
+
+        clearTimeout(imgTimeoutId);
+
+        if (imgRes.ok) {
+          const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+          const buffer = await imgRes.arrayBuffer();
+
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 1 day
+          return res.send(Buffer.from(buffer));
+        }
+      }
+    }
+
+    console.warn(`[Instagram Thumbnail] Extraction failed for ${shortcode}. Using high-quality placeholder image proxy.`);
+
+    // --- PHASE 3: GRACEFUL PREMIUM PLACEHOLDER FLOW ---
+    // Fetch and proxy a gorgeous Unsplash mockup creator placeholder directly, keeping a standard image stream 
+    // to maintain same-origin safety and avoid client-side image-load context errors.
+    const fallbackUrl = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop&q=60";
+    const placeholderRes = await fetch(fallbackUrl);
+    if (placeholderRes.ok) {
+      const buffer = await placeholderRes.arrayBuffer();
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(Buffer.from(buffer));
+    } else {
+      return res.redirect(fallbackUrl);
+    }
+
+  } catch (error: any) {
+    console.warn(`[Instagram Thumbnail Proxy Fallback]:`, error.message);
+    return res.redirect("https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop&q=60");
   }
 });
 

@@ -23,6 +23,8 @@ export interface ContentSeries extends SeriesConcept {
 export interface ContentDay {
   day: number;
   hooks: string[];
+  hookTypes?: string[];
+  hookExplanations?: string[];
   scripts: string[];
   captions: string[];
   selectedHookIndex?: number;
@@ -54,4 +56,14 @@ export interface Achievement {
   icon: string;
   tier: 'bronze' | 'silver' | 'gold' | 'platinum';
   unlocked_at?: string;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  link?: string;
+  is_read: boolean;
+  created_at: string;
 }

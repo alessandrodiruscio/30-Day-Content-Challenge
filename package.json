@@ -12,7 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check-env": "echo \"KEY IS: $GEMINI_API_KEY\""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

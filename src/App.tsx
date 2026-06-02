@@ -17,6 +17,7 @@ import {
   ShoppingBag, 
   Zap,
   ChevronLeft,
+  ChevronRight,
   Download,
   Share2,
   Instagram,
@@ -34,6 +35,9 @@ import {
   Play,
   Eye,
   EyeOff,
+  Bell,
+  Megaphone,
+  Send,
   Info,
   Trash2,
   ExternalLink,
@@ -55,7 +59,7 @@ import {
   XCircle,
   Loader2
 } from 'lucide-react';
-import { UserProfile, ContentSeries, SeriesConcept, User, Achievement } from './types';
+import { UserProfile, ContentSeries, SeriesConcept, User, Achievement, Notification } from './types';
 import { robustFetch, safeJson, fetchAchievements } from './utils/api';
 import { 
   generateOptions, 
@@ -72,6 +76,30 @@ import { twMerge } from 'tailwind-merge';
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export const parseGeminiError = (err: any): string => {
+  let message = typeof err === 'string' ? err : (err.message || 'Something went wrong while generating content.');
+  
+  // Check if it's a JSON string error from our backend or Gemini
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed.error?.message) message = parsed.error.message;
+  } catch {}
+
+  if (message.includes('API key expired') || message.includes('expired') || message === 'API_KEY_MISSING' || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
+    return "Your **Gemini API Key** has expired or is invalid. Even if you've refreshed the page, the key you currently have in Secrets is no longer working. \n\nTo fix this: \n1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey) \n2. Create a **NEW** API Key \n3. Open the **Secrets** panel (lock icon) in the left sidebar here in Build \n4. Update `GEMINI_API_KEY` with your new key \n5. **Refresh this browser tab** one last time.";
+  } else if (message.includes('503') || message.toLowerCase().includes('high demand') || message.toLowerCase().includes('overloaded')) {
+    return "The AI is currently processing many requests. We've tried several times automatically, but it's still busy. Please wait 10 seconds and try again.";
+  } else if (message.includes('timeout') || message.includes('took too long')) {
+    return "Generation took longer than expected. This often happens with very complex topics. Please try again or slightly simplify your niche.";
+  } else if (message.includes('502') || message.includes('500')) {
+    return "Our content engine is undergoing quick maintenance. Please try again in a few seconds.";
+  } else if (message.includes('safety') || message.includes('blocked')) {
+    return "Content could not be generated due to AI safety filters. Please try rephrasing your niche or target audience.";
+  }
+  
+  return message;
+};
 
 function StrategyWizard({ seriesId, onComplete }: { seriesId: number, onComplete: () => void }) {
   const [step, setStep] = useState(0);
@@ -368,7 +396,7 @@ export default function App() {
     localStorage.setItem('language', next);
   };
 
-  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password'>(() => {
+  const [step, setStep] = useState<'landing' | 'form' | 'loading_options' | 'results' | 'loading_series' | 'detail' | 'auth' | 'my_strategies' | 'profile' | 'recommended_tools' | 'reset_password' | 'admin_broadcast'>(() => {
     if (isResetStepUrl && initialResetToken) {
       return 'reset_password';
     }
@@ -380,6 +408,9 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [membership, setMembership] = useState<{ isMember: boolean, discordUrl: string, trialUrl: string } | null>(null);
   const [resetToken] = useState<string>(initialResetToken);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Clean up URL parameters after initial parse so we don't get stuck here
   useEffect(() => {
@@ -511,6 +542,46 @@ export default function App() {
     restoreSession();
   }, []);
 
+  useEffect(() => {
+    if (token) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 60000); // Check every minute
+      return () => clearInterval(interval);
+    }
+  }, [token]);
+
+  const fetchNotifications = async () => {
+    if (!token) return;
+    try {
+      const res = await robustFetch('/api/notifications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  const markAsRead = async (id: number) => {
+    if (!token) return;
+    try {
+      const res = await robustFetch(`/api/notifications/${id}/read`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
+    }
+  };
+
   const handleOpenKeySelector = () => {};
 
   const handleBugSubmit = async (e: React.FormEvent) => {
@@ -523,7 +594,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: user?.name || user?.email?.split('@')[0] || "User",
+          name: (user as any)?.name || user?.email?.split('@')[0] || "User",
           email: user?.email || "Unknown",
           message: bugMessage
         })
@@ -542,29 +613,7 @@ export default function App() {
 
   const handleGeminiError = (err: any) => {
     console.error("Gemini Error:", err);
-    let message = typeof err === 'string' ? err : (err.message || 'Something went wrong while generating content.');
-    
-    // Check if it's a JSON string error from our backend or Gemini
-    try {
-      const parsed = JSON.parse(message);
-      if (parsed.error?.message) message = parsed.error.message;
-    } catch {}
-
-    if (message === 'API_KEY_MISSING') {
-      message = "Gemini API key is missing. Please add it to your environment variables or secrets panel.";
-    } else if (message === 'API_KEY_INVALID') {
-      message = "The provided Gemini API key is invalid. Please check your API key in the secrets panel and try again.";
-    } else if (message.includes('503') || message.toLowerCase().includes('high demand') || message.toLowerCase().includes('overloaded')) {
-      message = "The AI is currently processing many requests. We've tried several times automatically, but it's still busy. Please wait 10 seconds and click 'Generate' again.";
-    } else if (message.includes('timeout') || message.includes('took too long')) {
-      message = "Generation took longer than expected. This often happens with very complex topics. Please try again or slightly simplify your niche.";
-    } else if (message.includes('502') || message.includes('500')) {
-      message = "Our content engine is undergoing quick maintenance. Please try again in a few seconds.";
-    } else if (message.includes('safety') || message.includes('blocked')) {
-      message = "Content could not be generated due to AI safety filters. Please try rephrasing your niche or target audience.";
-    }
-    
-    setError(message);
+    setError(parseGeminiError(err));
     setLoadingProgress(0);
     // Don't jump back to landing, stay on form so they can tweak or retry
     setStep('form');
@@ -877,6 +926,92 @@ export default function App() {
               <span className="hidden sm:inline">{i18n.language === 'en' ? 'EN' : 'ES'}</span>
             </button>
             
+            {user && (
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="relative p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-zinc-50 transition-all border border-zinc-200"
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsNotificationsOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-[2rem] shadow-signature border border-surface-container-highest/20 z-50 overflow-hidden"
+                      >
+                        <div className="px-6 py-4 border-b border-surface-container flex items-center justify-between">
+                          <h3 className="font-bold text-on-surface">Notifications</h3>
+                          <button onClick={() => setIsNotificationsOpen(false)} className="text-zinc-400 hover:text-zinc-600">
+                             <X size={18} />
+                          </button>
+                        </div>
+                        <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                          {notifications.length > 0 ? (
+                            notifications.map((notif) => (
+                              <div 
+                                key={notif.id} 
+                                className={cn(
+                                  "px-6 py-4 border-b border-zinc-50 transition-colors",
+                                  !notif.is_read ? "bg-primary/5" : "hover:bg-zinc-50"
+                                )}
+                              >
+                                <div className="flex justify-between items-start mb-1">
+                                  <h4 className={cn("text-sm font-bold", !notif.is_read ? "text-primary" : "text-zinc-900")}>
+                                    {notif.title}
+                                  </h4>
+                                  {!notif.is_read && (
+                                    <button 
+                                      onClick={() => markAsRead(notif.id)}
+                                      className="text-[10px] font-bold text-primary hover:underline"
+                                    >
+                                      Mark as read
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="text-xs text-zinc-600 leading-relaxed mb-2">
+                                  {notif.message}
+                                </p>
+                                {notif.link && (
+                                  <a 
+                                    href={notif.link} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
+                                    onClick={() => markAsRead(notif.id)}
+                                  >
+                                    Visit Link <ExternalLink size={10} />
+                                  </a>
+                                )}
+                                <p className="text-[10px] text-zinc-400 mt-2">
+                                  {new Date(notif.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-6 py-12 text-center">
+                              <Bell size={32} className="mx-auto text-zinc-200 mb-3" />
+                              <p className="text-zinc-400 text-sm">No notifications yet</p>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+            
             {user ? (
               <div className="relative">
                 <button 
@@ -935,6 +1070,19 @@ export default function App() {
                           {membership.isMember ? <MessageSquare size={18} /> : <Sparkles size={18} />}
                           <span className="font-medium">{t('nav.joinCommunity')}</span>
                         </a>
+                      )}
+
+                      {(user?.email === 'alessandro.diruscio@gmail.com' || (((import.meta as any).env.VITE_ADMIN_EMAIL) && user?.email === ((import.meta as any).env.VITE_ADMIN_EMAIL))) && (
+                        <button 
+                          onClick={() => {
+                            setStep('admin_broadcast');
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-6 py-3 text-brand-primary bg-brand-primary/5 hover:bg-brand-primary/10 transition-colors text-left"
+                        >
+                          <Megaphone size={18} />
+                          <span className="font-medium">Broadcast Notification</span>
+                        </button>
                       )}
 
                       <button 
@@ -1062,6 +1210,13 @@ export default function App() {
               key="profile"
               profile={profile}
               onSave={handleSaveProfile}
+              onBack={() => setStep('my_strategies')}
+            />
+          )}
+
+          {step === 'admin_broadcast' && (
+            <AdminBroadcastView 
+              key="admin_broadcast"
               onBack={() => setStep('my_strategies')}
             />
           )}
@@ -1505,7 +1660,7 @@ function LandingView({ onStart, user, onSeeStrategies }: { onStart: () => void, 
             className="flex flex-col items-center"
           >
             <div className="w-16 h-16 md:w-20 md:h-20 bg-surface-container/10 border border-surface-container/20 rounded-full flex items-center justify-center mb-10 md:mb-12 backdrop-blur-md">
-               <svg width="24" height="24" md:width="32" md:height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white/80 scale-125 md:scale-150">
+               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white/80 scale-125 md:scale-150">
                  <path d="M10 11L8 15H11V19H5V11L7 7H10L10 11ZM20 11L18 15H21V19H15V11L17 7H20L20 11Z" fill="currentColor"/>
                </svg>
             </div>
@@ -2315,6 +2470,270 @@ function ProfileView({ profile, onSave, onBack }: { profile: UserProfile, onSave
   );
 }
 
+function AdminBroadcastView({ onBack }: { onBack: () => void }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="max-w-2xl mx-auto px-8 py-20 space-y-12"
+    >
+      <div>
+        <button 
+          onClick={onBack}
+          className="flex items-center gap-2 text-zinc-500 hover:text-brand-primary mb-12 transition-colors group"
+        >
+          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+          <span className="font-bold uppercase tracking-widest text-[10px]">Back to Strategies</span>
+        </button>
+
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-3 bg-brand-primary/10 text-brand-primary rounded-[1.5rem]">
+            <Megaphone size={32} />
+          </div>
+          <div>
+            <h2 className="text-3xl font-black font-display tracking-tight">Admin Console</h2>
+            <p className="text-zinc-500">Configure global challenges data and broadcast messages.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-bold font-display tracking-tight text-zinc-850">1. Send Global Broadcast</h3>
+        <AdminBroadcastPanel />
+      </div>
+
+      <hr className="border-zinc-200" />
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-bold font-display tracking-tight text-zinc-850">2. Creator Examples Data Source</h3>
+        <AdminSpreadsheetPanel />
+      </div>
+    </motion.div>
+  );
+}
+
+function AdminBroadcastPanel() {
+  const [data, setData] = useState({ secret: '', title: '', message: '', link: '' });
+  const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await robustFetch('/api/admin/notifications/broadcast', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-admin-secret': data.secret
+        },
+        body: JSON.stringify({
+          title: data.title,
+          message: data.message,
+          link: data.link
+        })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setStatus({ type: 'success', msg: `Sent to ${resData.count} recipients!` });
+        setData({ ...data, title: '', message: '', link: '' });
+      } else {
+        setStatus({ type: 'error', msg: resData.error || 'Broadcast failed' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', msg: 'Network error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 bg-zinc-50 p-6 rounded-[2rem] border border-zinc-200">
+      <div className="space-y-2">
+        <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Admin Secret</label>
+        <input 
+          type="password"
+          required
+          placeholder="Enter Admin Secret to authorize"
+          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none"
+          value={data.secret}
+          onChange={e => setData({...data, secret: e.target.value})}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Title</label>
+          <input 
+            type="text"
+            required
+            placeholder="Notification Title"
+            className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none"
+            value={data.title}
+            onChange={e => setData({...data, title: e.target.value})}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Message</label>
+          <textarea 
+            required
+            rows={3}
+            placeholder="Your message to everyone..."
+            className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none resize-none"
+            value={data.message}
+            onChange={e => setData({...data, message: e.target.value})}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Link (Optional)</label>
+          <input 
+            type="url"
+            placeholder="https://..."
+            className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none"
+            value={data.link}
+            onChange={e => setData({...data, link: e.target.value})}
+          />
+        </div>
+      </div>
+
+      {status && (
+        <div className={cn(
+          "p-4 rounded-xl text-sm font-medium",
+          status.type === 'success' ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+        )}>
+          {status.msg}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-black transition-all disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+        Broadcast to All Members
+      </button>
+    </form>
+  );
+}
+
+function AdminSpreadsheetPanel() {
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [secret, setSecret] = useState('');
+  const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    robustFetch('/api/admin/settings', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(res => safeJson(res))
+    .then(data => {
+      if (data && data.creator_examples_sheet_url) {
+        setSheetUrl(data.creator_examples_sheet_url);
+      }
+    })
+    .catch(err => {
+      console.error("Could not fetch admin settings:", err);
+    });
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await robustFetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-admin-secret': secret
+        },
+        body: JSON.stringify({
+          creator_examples_sheet_url: sheetUrl
+        })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setStatus({ type: 'success', msg: 'Google Spreadsheet link updated successfully for all users!' });
+        setSecret('');
+      } else {
+        setStatus({ type: 'error', msg: resData.error || 'Failed to update Spreadsheet link' });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', msg: 'Network error or unauthorized' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 bg-zinc-50 p-6 rounded-[2rem] border border-zinc-200">
+      <p className="text-xs text-zinc-500 leading-relaxed mb-1">
+        Connect any Google Spreadsheet containing user examples. Set link sharing to <strong>&quot;Anyone with the link can view&quot;</strong>. Expected columns (first row treated as headers):
+        <code className="block bg-zinc-100 p-2 text-[11px] rounded font-mono mt-2 text-zinc-650">
+          Day (numbers 1-30) | Instagram Video Link | Challenge Description | Video Style | Results achieved
+        </code>
+      </p>
+
+      <div className="space-y-2">
+        <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Admin Secret</label>
+        <input 
+          type="password"
+          required
+          placeholder="Enter Admin Secret to authorize"
+          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none"
+          value={secret}
+          onChange={e => setSecret(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 ml-1">Spreadsheet Share/Export URL</label>
+        <input 
+          type="url"
+          required
+          placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"
+          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 outline-none"
+          value={sheetUrl}
+          onChange={e => setSheetUrl(e.target.value)}
+        />
+      </div>
+
+      {status && (
+        <div className={cn(
+          "p-4 rounded-xl text-sm font-medium",
+          status.type === 'success' ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+        )}>
+          {status.msg}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-4 bg-brand-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-primary/90 transition-all disabled:opacity-50"
+      >
+        {loading ? <Loader2 className="animate-spin" size={18} /> : <Settings size={18} />}
+        Save Spreadsheet Connection
+      </button>
+    </form>
+  );
+}
+
 function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey }: { 
   options: SeriesConcept[], 
   onSelect: (s: SeriesConcept) => void,
@@ -2415,6 +2834,7 @@ function ResultsView({ options, onSelect, onBack, error, hasApiKey, onSelectKey 
 function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: any, token: string | null, profile: UserProfile, onBack: () => void, onSave: (s: any) => Promise<void> }) {
   const { t, i18n } = useTranslation();
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Script editing and teleprompter state
   const [editingScript, setEditingScript] = useState<{ day: number; hook: number } | null>(null);
@@ -2452,7 +2872,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [activeDay, setActiveDay] = useState<number>(1);
   const [completedDays, setCompletedDays] = useState<number[]>(series.completed_days || []);
   const [hookIndices, setHookIndices] = useState<Record<number, number>>({});
-  const [showStoryboard, setShowStoryboard] = useState<boolean>(false);
+  const [showStoryboard, setShowStoryboard] = useState<boolean>(true);
+  const [playedReels, setPlayedReels] = useState<Record<number, boolean>>({});
   const [viewMode, setViewMode] = useState<'reel' | 'carousel'>('reel');
   const [detailViewMode, setDetailViewMode] = useState<'day' | 'calendar'>('day');
   const [dayChecklist, setDayChecklist] = useState<Record<number, Record<string, boolean>>>(series.day_checklist || {});
@@ -2469,6 +2890,19 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [showAchievements, setShowAchievements] = useState<boolean>(false);
   const [isTailoring, setIsTailoring] = useState<Record<number, boolean>>({});
+  const [showFloatingNav, setShowFloatingNav] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 450) {
+        setShowFloatingNav(true);
+      } else {
+        setShowFloatingNav(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Regeneration state
   const [showRegenerateModal, setShowRegenerateModal] = useState<boolean>(false);
@@ -2478,6 +2912,30 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
   // Background chunk generation resumed
   const [isResumingGeneration, setIsResumingGeneration] = useState(false);
+
+  // Creator examples states
+  const [creatorExamples, setCreatorExamples] = useState<any[]>([]);
+  const [loadingExamples, setLoadingExamples] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingExamples(true);
+    robustFetch('/api/creator-examples', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => safeJson(res))
+    .then(resData => {
+      if (resData && resData.data) {
+        setCreatorExamples(resData.data);
+      }
+    })
+    .catch(err => {
+      console.error("Failed to fetch creator examples:", err);
+    })
+    .finally(() => {
+      setLoadingExamples(false);
+    });
+  }, [token]);
 
   useEffect(() => {
     const ungeneratedDays = series.days.filter((d: any) => !d.scripts || d.scripts.length === 0 || d.scripts[0] === "");
@@ -2637,8 +3095,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
 
         if (onSave) await onSave(updatedSeries);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Content generation error:", err);
+      setError(parseGeminiError(err));
+      setTimeout(() => setError(null), 8000);
     } finally {
       setIsTailoring(prev => ({ ...prev, [dayNum]: false }));
     }
@@ -2709,11 +3169,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       }
     } catch (err: any) {
       console.error("Failed to regenerate day:", err);
-      let errorMsg = err.message || "Failed to regenerate day. Please try again.";
-      if (errorMsg.includes('503') || errorMsg.includes('high demand')) {
-        errorMsg = "The AI is currently processing many requests. Please wait a moment and try again.";
-      }
-      setRegenerateError(errorMsg);
+      setRegenerateError(parseGeminiError(err));
     } finally {
       setIsRegenerating(false);
     }
@@ -2881,8 +3337,17 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
   const getDisplayContent = () => {
     // 1. Resolve Hooks
     let displayHook = '';
+    let displayHookType = '';
+    let displayHookExplanation = '';
+    
     if (Array.isArray(currentDay.hooks)) {
       displayHook = currentDay.hooks[currentHookIndex] || currentDay.hooks[0] || '';
+      if (Array.isArray(currentDay.hookTypes)) {
+        displayHookType = currentDay.hookTypes[currentHookIndex] || '';
+      }
+      if (Array.isArray(currentDay.hookExplanations)) {
+        displayHookExplanation = currentDay.hookExplanations[currentHookIndex] || '';
+      }
     } else {
       displayHook = currentDay.hook || '';
     }
@@ -2947,10 +3412,10 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       displayVisuals = currentDay.visuals || '';
     }
 
-    return { displayHook, displayScript, displayCaption, displayCTA, displayAdvice, displayVisuals };
+    return { displayHook, displayHookType, displayHookExplanation, displayScript, displayCaption, displayCTA, displayAdvice, displayVisuals };
   };
 
-  const { displayHook, displayScript, displayCaption, displayCTA, displayAdvice, displayVisuals } = getDisplayContent();
+  const { displayHook, displayHookType, displayHookExplanation, displayScript, displayCaption, displayCTA, displayAdvice, displayVisuals } = getDisplayContent();
 
   const startDate = series.start_date ? new Date(series.start_date.replace(/-/g, '/')) : null;
 
@@ -3253,24 +3718,32 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
             <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
             <span>Back to Strategies</span>
           </button>
-        <div className="flex gap-4">
-          <button 
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
-          >
-            <Download size={18} />
-            <span>{t('detail.exportPdf')}</span>
-          </button>
-          <button 
-            onClick={handleShare}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-sm font-semibold"
-          >
-            <Share2 size={18} />
-            <span>{t('detail.share')}</span>
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 transition-all text-sm font-semibold"
+            >
+              <Download size={18} />
+              <span>{t('detail.exportPdf')}</span>
+            </button>
+            <button 
+              onClick={handleShare}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 transition-all text-sm font-semibold"
+            >
+              <Share2 size={18} />
+              <span>{t('detail.share')}</span>
+            </button>
+          </div>
         </div>
-      </div>
-
+        
+        {error && (
+          <div className="mb-8 p-6 bg-red-50 border border-red-100 text-red-600 rounded-3xl">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="flex-shrink-0 mt-0.5" size={18} />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+          </div>
+        )}
       {/* View mode toggle */}
       <div className="flex gap-2 mb-8 print:hidden">
         <button
@@ -3351,8 +3824,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                   key={day.day}
                   onClick={() => { 
                     if (isGenerating) {
-                      setError(`Day ${day.day} is still being generated. Please wait a moment.`);
-                      setTimeout(() => setError(""), 3000);
+                      setRegenerateError(`Day ${day.day} is still being generated. Please wait a moment.`);
+                      setTimeout(() => setRegenerateError(""), 3000);
                       return;
                     }
                     setActiveDay(day.day); 
@@ -3401,7 +3874,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
         </motion.div>
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-12">
-        {/* Left Column: Sidebar Navigation */}
+        {/* Left Column (Desktop Sidebar): Sidebar Navigation */}
         <div className="lg:col-span-4 space-y-4 md:space-y-8">
           <div className="p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] bg-on-surface text-white shadow-elegant shadow-black/20 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
@@ -3451,7 +3924,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
             </div>
           )}
 
-          <div className="bg-white rounded-[2rem] border border-zinc-200 p-6">
+          <div className="bg-white rounded-[2rem] border border-zinc-200 p-6 lg:sticky lg:top-24">
             <div className="flex items-center justify-between mb-6 px-2">
               <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{t('detail.calendarRoadmap')}</h3>
               <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
@@ -3468,8 +3941,8 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     key={day.day}
                     onClick={() => {
                       if (isGenerating) {
-                        setError(`Day ${day.day} is still being generated. Please wait a moment.`);
-                        setTimeout(() => setError(""), 3000);
+                        setRegenerateError(`Day ${day.day} is still being generated. Please wait a moment.`);
+                        setTimeout(() => setRegenerateError(""), 3000);
                         return;
                       }
                       setActiveDay(day.day);
@@ -3513,6 +3986,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
+              id="active-day-content"
               className="bg-white rounded-3xl md:rounded-[2.5rem] border border-zinc-200 shadow-sm overflow-hidden"
             >
               <div className="p-4 sm:p-6 md:p-12">
@@ -3778,12 +4252,27 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                         )}
                     </div>
                     <div className="relative group wizard-hooks">
-                      <div className="p-4 md:p-8 rounded-2xl md:rounded-3xl bg-zinc-50 border border-zinc-100 text-lg md:text-xl font-medium leading-relaxed italic text-zinc-800 shadow-inner">
-                        <span className="text-brand-primary opacity-20 text-3xl md:text-4xl absolute top-3 left-3 md:top-4 md:left-4 font-serif">"</span>
-                        <div className="px-2 md:px-4">
-                          {displayHook}
+                      <div className="p-4 md:p-8 rounded-2xl md:rounded-3xl bg-zinc-50 border border-zinc-100 text-lg md:text-xl font-medium leading-relaxed italic text-zinc-800 shadow-inner overflow-hidden">
+                        <span className="text-brand-primary opacity-20 text-3xl md:text-4xl absolute top-3 left-3 md:top-4 md:left-4 font-serif z-0">"</span>
+                        <div className="px-2 md:px-4 flex flex-col gap-3 relative z-10">
+                          {displayHookType && (
+                             <span className="inline-block bg-brand-primary/10 text-brand-primary text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full w-max not-italic">
+                               {displayHookType}
+                             </span>
+                          )}
+                          <span className="text-zinc-900 leading-snug">{displayHook}</span>
+                          
+                          {displayHookExplanation && (
+                            <div className="text-sm font-normal not-italic text-zinc-600 mt-2 bg-white/70 p-3.5 rounded-xl border border-zinc-200/60 shadow-sm backdrop-blur-sm">
+                              <span className="font-bold text-zinc-800 block mb-1.5 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                <Zap size={10} className="text-brand-primary" />
+                                Why this angle works
+                              </span>
+                              <p className="leading-relaxed text-[13px]">{displayHookExplanation}</p>
+                            </div>
+                          )}
                         </div>
-                        <span className="text-brand-primary opacity-20 text-3xl md:text-4xl absolute bottom-3 right-3 md:bottom-4 md:right-4 font-serif">"</span>
+                        <span className="text-brand-primary opacity-20 text-3xl md:text-4xl absolute bottom-3 right-3 md:bottom-4 md:right-4 font-serif z-0">"</span>
                       </div>
                       
                       {/* Floating Navigation Arrows for "Swiping" feel */}
@@ -4236,6 +4725,127 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
                     </div>
                   </section>
 
+                  {(() => {
+                    const currentCreatorExample = creatorExamples.find(ex => ex.day === activeDay) || creatorExamples[activeDay - 1];
+                    if (!currentCreatorExample) return null;
+                    const thumbnailUrl = currentCreatorExample.link 
+                      ? `/api/instagram-video-thumbnail?url=${encodeURIComponent(currentCreatorExample.link)}` 
+                      : null;
+
+                    return (
+                      <section className="pt-6 md:pt-8 border-t border-zinc-100">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Sparkles size={18} className="text-purple-500 animate-pulse" />
+                          <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Creator Inspiration (Day {activeDay})</h4>
+                        </div>
+                        
+                        <div className="p-5 md:p-6 rounded-[2rem] bg-gradient-to-br from-purple-50/50 to-pink-50/30 border border-purple-100/60 shadow-sm relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/5 rounded-full blur-2xl pointer-events-none" />
+                          <div className="absolute bottom-0 left-0 w-24 h-24 bg-pink-200/5 rounded-full blur-xl pointer-events-none" />
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start relative z-10">
+                            {/* Text Info */}
+                            <div className="md:col-span-8 space-y-5 order-2 md:order-1">
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100/60 text-purple-700 select-none">
+                                    30-Day Creator Example
+                                  </span>
+                                  <h5 className="text-base font-bold text-zinc-900 mt-1">Live Creator Checklist</h5>
+                                </div>
+                              </div>
+
+                              <div className="space-y-4 text-sm">
+                                {currentCreatorExample.description && (
+                                  <div className="flex gap-2.5">
+                                    <span className="text-base leading-none select-none">🎯</span>
+                                    <div>
+                                      <strong className="block text-xs uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Challenge Concept</strong>
+                                      <p className="text-zinc-700 leading-relaxed font-semibold">{currentCreatorExample.description}</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {currentCreatorExample.style && (
+                                  <div className="flex gap-2.5">
+                                    <span className="text-base leading-none select-none">🎬</span>
+                                    <div>
+                                      <strong className="block text-xs uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Video Style & Aesthetic</strong>
+                                      <p className="text-zinc-700 leading-relaxed">{currentCreatorExample.style}</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {currentCreatorExample.results && (
+                                  <div className="flex gap-2.5">
+                                    <span className="text-base leading-none select-none">📈</span>
+                                    <div>
+                                      <strong className="block text-xs uppercase tracking-wider text-zinc-400 font-bold mb-0.5">Results Achieved</strong>
+                                      <p className="text-emerald-700 font-bold leading-relaxed bg-emerald-50/60 border border-emerald-100/30 px-2.5 py-1 rounded-lg inline-block text-[13px]">
+                                        {currentCreatorExample.results}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Reel Custom Thumbnail Preview - Direct New Tab Link */}
+                            {currentCreatorExample.link && (
+                              <div className="md:col-span-4 flex flex-col items-center justify-center order-1 md:order-2">
+                                <a
+                                  href={currentCreatorExample.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full max-w-[150px] aspect-[9/16] rounded-2xl bg-zinc-900 border border-purple-200/50 shadow-md overflow-hidden relative group block cursor-pointer"
+                                >
+                                  {/* Thumbnail Image from Server Proxy */}
+                                  <img 
+                                    src={thumbnailUrl || ""} 
+                                    alt="Reel Preview" 
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    onError={(e) => {
+                                      (e.target as any).src = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop&q=60";
+                                    }}
+                                  />
+                                  
+                                  {/* Dynamic Overlays */}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 flex flex-col justify-between p-3 select-none">
+                                    <div className="flex justify-between items-center">
+                                      <span className="px-2 py-0.5 bg-black/60 backdrop-blur-md rounded-md text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                        REEL
+                                      </span>
+                                      <span className="p-1 rounded-full bg-white/10 text-white transition-colors">
+                                        <ExternalLink size={10} />
+                                      </span>
+                                    </div>
+
+                                    {/* Big pulsing Play / Reel Button */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-purple-600 flex items-center justify-center text-white shadow-lg transform group-hover:scale-110 transition-transform">
+                                        <Play size={16} fill="currentColor" className="ml-0.5" />
+                                      </div>
+                                    </div>
+
+                                    {/* Text link label at bottom */}
+                                    <div className="text-center w-full">
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold tracking-wider text-pink-200 bg-pink-950/40 backdrop-blur-sm px-2 py-1 rounded-lg w-full justify-center group-hover:text-white transition-colors border border-pink-400/10">
+                                        <Instagram size={10} />
+                                        WATCH ON IG
+                                      </span>
+                                    </div>
+                                  </div>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </section>
+                    );
+                  })()}
+
                   {currentDay.searchTerms && currentDay.searchTerms.length > 0 && (
                     <section className="pt-6 md:pt-8 border-t border-zinc-100 wizard-inspiration">
                       <div className="flex items-center gap-2 mb-4">
@@ -4345,6 +4955,53 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
               </a>
             </motion.div>
           )}
+
+          <AnimatePresence>
+            {showFloatingNav && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full bg-white/95 shadow-xl border border-zinc-200/80 backdrop-blur-md pointer-events-auto"
+              >
+                <button
+                  disabled={activeDay === 1}
+                  onClick={() => {
+                    setActiveDay(prev => Math.max(1, prev - 1));
+                    setTimeout(() => {
+                      document.getElementById('active-day-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 50);
+                  }}
+                  className="p-2 rounded-full hover:bg-zinc-100 text-zinc-600 disabled:opacity-35 disabled:hover:bg-transparent transition-all cursor-pointer"
+                  title="Previous Day"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-zinc-100 rounded-full text-xs font-bold text-zinc-800 select-none">
+                  <span>Day {activeDay} of 30</span>
+                </div>
+
+                <button
+                  disabled={
+                    activeDay === 30 || 
+                    (series.days[activeDay] && (!series.days[activeDay].scripts || series.days[activeDay].scripts.length === 0 || series.days[activeDay].scripts[0] === ""))
+                  }
+                  onClick={() => {
+                    setActiveDay(prev => Math.min(30, prev + 1));
+                    setTimeout(() => {
+                      document.getElementById('active-day-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 50);
+                  }}
+                  className="p-2 rounded-full hover:bg-zinc-100 text-zinc-600 disabled:opacity-35 disabled:hover:bg-transparent transition-all cursor-pointer"
+                  title="Next Day"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
       )}
@@ -4378,7 +5035,7 @@ function TeleprompterOverlay({
   const previewRef = React.useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = React.useState(0);
   const [previewScroll, setPreviewScroll] = React.useState(0);
-  const [showStoryboardLive, setShowStoryboardLive] = React.useState(false);
+  const [showStoryboardLive, setShowStoryboardLive] = React.useState(true);
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);

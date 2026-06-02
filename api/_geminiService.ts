@@ -3,10 +3,21 @@ import type { UserProfile, SeriesConcept, ContentSeries } from "../src/types.js"
 
 // Initialize Gemini with the platform-provided API key
 const getAI = () => {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
+  // Try multiple common variable names, prioritizing a fresh one to bypass caching
+  let apiKey = (
+    process.env.API_KEY_GEMINI_V3 || 
+    process.env.GEMINI_API_KEY || 
+    process.env.GOOGLE_GEMINI_API_KEY || 
+    ''
+  ).trim();
+
+  // Strip potential wrapping quotes if user pasted them
+  apiKey = apiKey.replace(/^["']|["']$/g, '');
+
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     throw new Error('GEMINI_API_KEY_MISSING');
   }
+
   return new GoogleGenAI({ apiKey });
 };
 
@@ -100,7 +111,7 @@ export const generateSeries = async (concept: SeriesConcept, profile: UserProfil
     ? 'Respond completely in Spanish. All hooks, scripts, CTAs, captions, and descriptions must be in Spanish.' 
     : 'Respond in English.';
     
-  const prompt = `Create a high-level 30-day Instagram Reel series skeleton plan. 
+    const prompt = `Create a high-level 30-day Instagram Reel series skeleton plan. 
   
   SELECTED CONCEPT:
   Title: ${concept.title}
@@ -115,12 +126,25 @@ export const generateSeries = async (concept: SeriesConcept, profile: UserProfil
 
   REQUIREMENTS:
   1. EVERY SINGLE DAY must provide a unique value proposition for the niche: "${profile.niche}".
-  2. For EACH of the 30 days, generate:
-     - EXACTLY 3 distinct, high-impact hooks.
+  2. For EACH of the 30 days, generate EXACTLY 3 distinct, high-impact hooks. Use a different hook type for each of the 3 hooks.
+     
+     Choose from these 10 Hook Types:
+     - The "Mistake" Hook: "I’m honestly embarrassed it took me three years to realize this about [Topic]..."
+     - The "Contrarian" Hook: "Stop saving your money. Seriously. It’s the fastest way to stay broke."
+     - The "Insider" Hook: "I found a loophole in [Software/Platform] and I feel like I'm breaking the law."
+     - The "Relatability" Hook: "If you’re still doing 100 crunches to lose belly fat... we need to have a serious talk."
+     - The "Ease" Hook: "I stopped going to the gym for 2 hours and actually got better results. Here’s the hack."
+     - The "Call-Out" Hook: "POV: You’re tired of chicken and broccoli, but you still want to see your abs."
+     - The "Secret" Hook: "This is the one thing sellers are hiding from you right now."
+     - The "Warning" Hook: "Don't even think about buying a house until you check these three things."
+     - The "Reality Check" Hook: "Most people think [Skill] is hard. It's not. You're just doing it the long way."
+     - The "Tool" Hook: "I found a free app that basically does 90% of my work for me."
+
+  3. For EACH day, also generate:
      - A concise 1-sentence value statement for the day.
      - A specific CTA for the day.
      - 3 research search terms.
-  3. DO NOT generate full scripts or storyboards in this request. This is a skeleton plan.
+  4. DO NOT generate full scripts or storyboards in this request. This is a skeleton plan.
 
   ${languageInstruction}`;
 
@@ -144,12 +168,14 @@ export const generateSeries = async (concept: SeriesConcept, profile: UserProfil
               type: Type.OBJECT,
               properties: {
                 day: { type: Type.INTEGER },
-                hooks: { type: Type.ARRAY, items: { type: Type.STRING } },
+                hooks: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of exactly 3 different hook strings" },
+                hookTypes: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of exactly 3 strings representing the name of the hook type used from the list provided (e.g., 'The Contrarian Hook')" },
+                hookExplanations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of exactly 3 strings, each being a 1-2 sentence explanation of WHY this specific hook works psychologically for this niche." },
                 value: { type: Type.STRING },
                 cta: { type: Type.STRING },
                 searchTerms: { type: Type.ARRAY, items: { type: Type.STRING } },
               },
-              required: ["day", "hooks", "value", "cta", "searchTerms"],
+              required: ["day", "hooks", "hookTypes", "hookExplanations", "value", "cta", "searchTerms"],
             },
           },
         },
@@ -183,7 +209,7 @@ export const generateSeriesChunk = async (
   const ai = getAI();
   const languageInstruction = language === 'es' ? 'All content must be in Spanish.' : 'All content must be in English.';
   
-  const dayStr = skeletonDays.map(d => `Day ${d.day}: ${d.value}`).join(', ');
+  const dayStr = skeletonDays.map(d => `Day ${d.day} Value: ${d.value}\nHooks:\n` + d.hooks.map((h: string, i: number) => `  Hook ${i+1}: ${h}`).join('\n')).join('\n\n');
 
   const prompt = `Generate 30-day Instagram Reel content.
   FOR EACH DAY, generate content for the 3 hooks provided.
@@ -349,10 +375,23 @@ export const regenerateDayContentWithIdea = async (
 
   REQUIREMENTS:
   1. Generate 3 COMPLETELY NEW HOOKS that align with the member's idea.
+     You must select 3 DIFFERENT hook types for each day from this specific list:
+     - The "Mistake" Hook
+     - The "Contrarian" Hook
+     - The "Insider" Hook
+     - The "Relatability" Hook
+     - The "Ease" Hook
+     - The "Call-Out" Hook
+     - The "Secret" Hook
+     - The "Warning" Hook
+     - The "Reality Check" Hook
+     - The "Tool" Hook
+     
+     For each hook, provide the hook text, the name of the type used, and a 1-2 sentence explanation of WHY this specific hook works psychologically for this niche.
   2. For EACH hook, generate a HIGH-DETAIL SCRIPT (160-200 words).
      REQUIREMENTS: EXACTLY 7 paragraphs.
      STRUCTURE: Hook, Relate, Transition, Struggle, Lesson, Result, CTA.
-     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\\n\\n). 
+     MANDATORY: Separate paragraphs with a DOUBLE NEWLINE (\n\n). 
      CRITICAL INSTRUCTION FOR RESULT VS CTA: The "Result" paragraph (paragraph 6) MUST ONLY describe the outcome/transformation and MUST NOT contain any questions, invitations, or calls to action. The Call To Action (CTA, paragraph 7) must ONLY be in the 7th and final paragraph. Ensure there is absolutely no overlap between the Result and the CTA.
      The CTA MUST be conversational and natural. e.g., "And if you're interested in [Offer Context], comment the word [KEYWORD] to get the link to [Resource/Offer]." (Offer: ${profile.primaryCTA || "your resource"}).
      CRITICAL INSTRUCTION FOR CTA KEYWORD: You must use the EXACT SAME keyword for the CTA consistently.
@@ -375,6 +414,8 @@ export const regenerateDayContentWithIdea = async (
         properties: {
           day: { type: Type.INTEGER },
           hooks: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 new hooks" },
+          hookTypes: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of exactly 3 strings representing the name of the hook type used from the list provided (e.g., 'The Contrarian Hook')" },
+          hookExplanations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of exactly 3 strings, each being a 1-2 sentence explanation of WHY this specific hook works psychologically for this niche." },
           value: { type: Type.STRING },
           cta: { type: Type.STRING },
           searchTerms: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -382,7 +423,7 @@ export const regenerateDayContentWithIdea = async (
           visuals_list: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 storyboards (6 lines each)" },
           captions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 captions" }
         },
-        required: ["day", "hooks", "value", "cta", "searchTerms", "scripts", "visuals_list", "captions"]
+        required: ["day", "hooks", "hookTypes", "hookExplanations", "value", "cta", "searchTerms", "scripts", "visuals_list", "captions"]
       }
     }
   }));
