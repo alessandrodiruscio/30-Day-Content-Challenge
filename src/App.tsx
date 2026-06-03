@@ -523,7 +523,7 @@ export default function App() {
             robustFetch('/api/community/membership', {
               headers: { 'Authorization': `Bearer ${token}` }
             })
-            .then(r => r.json())
+            .then(r => safeJson(r))
             .then(d => setMembership(d))
             .catch(err => console.error("Failed to fetch membership:", err));
           }
@@ -557,7 +557,7 @@ export default function App() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setNotifications(data);
         setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
       }
@@ -1154,7 +1154,7 @@ export default function App() {
                 const p1 = robustFetch('/api/community/membership', {
                   headers: { 'Authorization': `Bearer ${t}` }
                 })
-                .then(r => r.json())
+                .then(r => safeJson(r))
                 .then(d => setMembership(d))
                 .catch(err => console.error("Failed to fetch membership:", err));
                 
@@ -2539,11 +2539,12 @@ function AdminBroadcastPanel() {
           link: data.link
         })
       });
-      const resData = await res.json();
       if (res.ok) {
+        const resData = await safeJson(res);
         setStatus({ type: 'success', msg: `Sent to ${resData.count} recipients!` });
         setData({ ...data, title: '', message: '', link: '' });
       } else {
+        const resData = await safeJson(res).catch(() => ({ error: 'Broadcast failed' }));
         setStatus({ type: 'error', msg: resData.error || 'Broadcast failed' });
       }
     } catch (err) {
@@ -2666,11 +2667,11 @@ function AdminSpreadsheetPanel() {
           creator_examples_sheet_url: sheetUrl
         })
       });
-      const resData = await res.json();
       if (res.ok) {
         setStatus({ type: 'success', msg: 'Google Spreadsheet link updated successfully for all users!' });
         setSecret('');
       } else {
+        const resData = await safeJson(res).catch(() => ({ error: 'Failed to update Spreadsheet link' }));
         setStatus({ type: 'error', msg: resData.error || 'Failed to update Spreadsheet link' });
       }
     } catch (err) {
@@ -3424,7 +3425,7 @@ function SeriesDetailView({ series, token, profile, onBack, onSave }: { series: 
       robustFetch('/api/community/membership', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      .then(res => res.json())
+      .then(res => safeJson(res))
       .then(data => setMembership(data))
       .catch(err => console.error("Failed to fetch membership:", err));
     }
@@ -5336,7 +5337,7 @@ function ResetPasswordView({ token, onSuccess, onBack }: { token: string, onSucc
       if (res.ok) {
         setSuccess(true);
       } else {
-        const data = await res.json();
+        const data = await safeJson(res).catch(() => ({ error: t('resetPassword.resetFailed') }));
         setError(data.error || t('resetPassword.resetFailed'));
       }
     } catch (err) {
